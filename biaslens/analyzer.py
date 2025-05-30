@@ -28,6 +28,7 @@ class BiasLensAnalyzer:
     def sentiment_analyzer(self):
         """Lazy load sentiment analyzer"""
         if self._sentiment_analyzer is None:
+            print("[BiasLensAnalyzer] Initializing SentimentAnalyzer...")
             self._sentiment_analyzer = SentimentAnalyzer()
             self._initialized_components.add('sentiment')
         return self._sentiment_analyzer
@@ -36,6 +37,7 @@ class BiasLensAnalyzer:
     def emotion_classifier(self):
         """Lazy load emotion classifier"""
         if self._emotion_classifier is None:
+            print("[BiasLensAnalyzer] Initializing EmotionClassifier...")
             self._emotion_classifier = EmotionClassifier()
             self._initialized_components.add('emotion')
         return self._emotion_classifier
@@ -44,6 +46,7 @@ class BiasLensAnalyzer:
     def bias_detector(self):
         """Lazy load bias detector"""
         if self._bias_detector is None:
+            print("[BiasLensAnalyzer] Initializing BiasDetector...")
             self._bias_detector = BiasDetector()
             self._initialized_components.add('bias_detection')
         return self._bias_detector
@@ -52,6 +55,7 @@ class BiasLensAnalyzer:
     def bias_type_classifier(self):
         """Lazy load bias type classifier"""
         if self._bias_type_classifier is None:
+            print("[BiasLensAnalyzer] Initializing BiasTypeClassifier...")
             self._bias_type_classifier = BiasTypeClassifier()
             self._initialized_components.add('bias_classification')
         return self._bias_type_classifier
@@ -71,54 +75,85 @@ class BiasLensAnalyzer:
         """
 
         if not text or not text.strip():
-            return self._get_empty_analysis_result("Empty or invalid text provided")
+            # Even for empty/invalid text, if we need to conform to a structure that might include metadata:
+            # However, the original _get_empty_analysis_result doesn't fit the new primary output.
+            # For now, let's keep error handling for empty text simple as per previous changes.
+            # If metadata is strictly required even for this case, this would need adjustment.
+            return {
+                'trust_score': None,
+                'indicator': 'Error',
+                'explanation': ["Empty or invalid text provided"],
+                'tip': 'Analysis failed',
+                'metadata': {
+                    'component_processing_times': {},
+                    'overall_processing_time_seconds': 0
+                }
+            }
 
-        start_time = time.time()
+        overall_start_time = time.time()
+        component_processing_times = {}
 
         try:
             # Core ML Analysis
+            step_start_time = time.time()
             sentiment_result = self._analyze_sentiment_safe(text, headline)
+            component_processing_times['sentiment_analysis'] = round(time.time() - step_start_time, 4)
+
+            step_start_time = time.time()
             emotion_result = self._analyze_emotion_safe(text)
+            component_processing_times['emotion_analysis'] = round(time.time() - step_start_time, 4)
+
+            step_start_time = time.time()
             bias_result = self._analyze_bias_safe(text)
+            component_processing_times['bias_analysis'] = round(time.time() - step_start_time, 4)
 
             # Pattern Analysis (Nigerian-specific)
+            step_start_time = time.time()
             pattern_result = self._analyze_patterns_safe(text) if include_patterns else {}
+            component_processing_times['pattern_analysis'] = round(time.time() - step_start_time, 4)
 
             # Calculate Trust Score
+            step_start_time = time.time()
             trust_result = self._calculate_trust_score_safe(
                 text, sentiment_result, emotion_result, bias_result
             )
+            component_processing_times['trust_score_calculation'] = round(time.time() - step_start_time, 4)
 
-            # Generate Overall Assessment
+            # Generate Overall Assessment (even if not all parts are in final dict, it's a step)
+            step_start_time = time.time()
             overall_assessment = self._generate_overall_assessment(
                 sentiment_result, emotion_result, bias_result, trust_result
             )
+            component_processing_times['overall_assessment_generation'] = round(time.time() - step_start_time, 4)
 
-            # Performance metrics
-            # processing_time = round(time.time() - start_time, 3) # No longer returning full dict
+            overall_processing_time = round(time.time() - overall_start_time, 4)
 
-            # Construct the specific dictionary as per requirements
             return {
                 'trust_score': trust_result.get('score'),
                 'indicator': trust_result.get('indicator'),
                 'explanation': trust_result.get('explanation'),
-                'tip': trust_result.get('tip')
+                'tip': trust_result.get('tip'),
+                'metadata': {
+                    'component_processing_times': component_processing_times,
+                    'overall_processing_time_seconds': overall_processing_time,
+                    'text_length': len(text),
+                    'initialized_components': list(self._initialized_components),
+                    'analysis_timestamp': time.time()
+                }
             }
 
         except Exception as e:
-            # If an error occurs, we should still try to return a dictionary
-            # that hints at the expected structure, or a more specific error.
-            # For now, let's re-raise or return a simplified error structure.
-            # This part might need further refinement based on error handling strategy for the new return type.
-            # However, the original _get_error_analysis_result returns a dict with 'status', 'error', 'overall_assessment', 'metadata'
-            # which is not compatible with the new required return type.
-            # For the scope of this task, focusing on the successful case.
-            # A simple error indication:
+            overall_processing_time = round(time.time() - overall_start_time, 4)
             return {
                 'trust_score': None,
                 'indicator': 'Error',
                 'explanation': [f"An error occurred: {str(e)}"],
-                'tip': 'Analysis failed'
+                'tip': 'Analysis failed',
+                'metadata': {
+                    'component_processing_times': component_processing_times, # partial times if error occurred mid-way
+                    'overall_processing_time_seconds': overall_processing_time,
+                    'error_message': str(e)
+                }
             }
 
     def quick_analyze(self, text: str) -> Dict:
@@ -473,10 +508,14 @@ class BiasLensAnalyzer:
         }
 
 
+# Global instance of the analyzer
+_global_analyzer = BiasLensAnalyzer()
+
+
 # Convenience function for direct usage
 def analyze(text: str, include_patterns: bool = True, headline: Optional[str] = None) -> Dict:
     """
-    Direct analysis function - creates analyzer instance and runs analysis.
+    Direct analysis function - uses a global analyzer instance to run analysis.
 
     Args:
         text: Text to analyze
@@ -486,14 +525,14 @@ def analyze(text: str, include_patterns: bool = True, headline: Optional[str] = 
     Returns:
         Complete analysis results
     """
-    analyzer = BiasLensAnalyzer()
-    return analyzer.analyze(text, include_patterns, headline)
+    # Uses the global analyzer instance
+    return _global_analyzer.analyze(text, include_patterns, headline)
 
 
 # Quick analysis function
 def quick_analyze(text: str) -> Dict:
     """
-    Quick analysis function for lightweight processing.
+    Quick analysis function for lightweight processing - uses a global analyzer instance.
 
     Args:
         text: Text to analyze
@@ -501,5 +540,5 @@ def quick_analyze(text: str) -> Dict:
     Returns:
         Basic analysis results (sentiment + patterns only)
     """
-    analyzer = BiasLensAnalyzer()
-    return analyzer.quick_analyze(text)
+    # Uses the global analyzer instance
+    return _global_analyzer.quick_analyze(text)

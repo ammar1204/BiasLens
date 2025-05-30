@@ -26,6 +26,20 @@ assert 'explanation' in analyze_result, "analyze output missing 'explanation'"
 assert isinstance(analyze_result['explanation'], list), "analyze 'explanation' should be a list"
 assert 'tip' in analyze_result, "analyze output missing 'tip'"
 
+# Verify metadata and component_processing_times
+assert 'metadata' in analyze_result, "analyze output missing 'metadata'"
+assert isinstance(analyze_result.get('metadata'), dict), "analyze 'metadata' should be a dictionary"
+assert 'component_processing_times' in analyze_result['metadata'], "metadata missing 'component_processing_times'"
+assert isinstance(analyze_result['metadata'].get('component_processing_times'), dict), "'component_processing_times' should be a dictionary"
+# Optionally, check for a few expected keys in component_processing_times if they are always present
+expected_time_keys = [
+    'sentiment_analysis', 'emotion_analysis', 'bias_analysis',
+    'pattern_analysis', 'trust_score_calculation', 'overall_assessment_generation'
+]
+if isinstance(analyze_result['metadata'].get('component_processing_times'), dict):
+    for key in expected_time_keys:
+        assert key in analyze_result['metadata']['component_processing_times'], f"'{key}' missing from component_processing_times"
+
 print("analyze tests passed!")
 print("-" * 20)
 
