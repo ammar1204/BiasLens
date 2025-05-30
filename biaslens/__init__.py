@@ -1,4 +1,4 @@
-from .analyzer import BiasLensAnalyzer
+from .analyzer import *
 
 
 
