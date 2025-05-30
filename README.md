@@ -78,6 +78,25 @@ Bias Classification:
 ```
 *(Note: The example outputs are illustrative and may vary based on the models and text.)*
 
+## Running the Frontend
+
+To run the web frontend:
+
+1.  Navigate to the `frontend` directory:
+    ```bash
+    cd frontend
+    ```
+2.  Ensure all dependencies, including Flask, are installed:
+    ```bash
+    pip install -r ../requirements.txt
+    ```
+    (Note: an alternative is to run `pip install Flask` if you've already installed other requirements)
+3.  Run the Flask application:
+    ```bash
+    python app.py
+    ```
+4.  Open your web browser and go to `http://127.0.0.1:5000/` to use the analyzer.
+
 ## Project Structure
 ```
 biaslens/
