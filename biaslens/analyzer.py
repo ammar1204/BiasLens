@@ -95,28 +95,31 @@ class BiasLensAnalyzer:
             )
 
             # Performance metrics
-            processing_time = round(time.time() - start_time, 3)
+            # processing_time = round(time.time() - start_time, 3) # No longer returning full dict
 
+            # Construct the specific dictionary as per requirements
             return {
-                'status': 'success',
-                'overall_assessment': overall_assessment,
-                'trust_score': trust_result,
-                'analysis': {
-                    'sentiment': sentiment_result,
-                    'emotion': emotion_result,
-                    'bias': bias_result,
-                    'patterns': pattern_result
-                },
-                'metadata': {
-                    'processing_time_seconds': processing_time,
-                    'text_length': len(text),
-                    'initialized_components': list(self._initialized_components),
-                    'analysis_timestamp': time.time()
-                }
+                'trust_score': trust_result.get('score'),
+                'indicator': trust_result.get('indicator'),
+                'explanation': trust_result.get('explanation'),
+                'tip': trust_result.get('tip')
             }
 
         except Exception as e:
-            return self._get_error_analysis_result(str(e), time.time() - start_time)
+            # If an error occurs, we should still try to return a dictionary
+            # that hints at the expected structure, or a more specific error.
+            # For now, let's re-raise or return a simplified error structure.
+            # This part might need further refinement based on error handling strategy for the new return type.
+            # However, the original _get_error_analysis_result returns a dict with 'status', 'error', 'overall_assessment', 'metadata'
+            # which is not compatible with the new required return type.
+            # For the scope of this task, focusing on the successful case.
+            # A simple error indication:
+            return {
+                'trust_score': None,
+                'indicator': 'Error',
+                'explanation': [f"An error occurred: {str(e)}"],
+                'tip': 'Analysis failed'
+            }
 
     def quick_analyze(self, text: str) -> Dict:
         """
@@ -143,22 +146,19 @@ class BiasLensAnalyzer:
             )
 
             return {
-                'status': 'success',
-                'mode': 'quick_analysis',
-                'trust_score': basic_trust_score,
-                'sentiment': sentiment_result,
-                'patterns': {
-                    'nigerian_patterns': nigerian_patterns,
-                    'fake_news_risk': fake_details if fake_detected else None
-                },
-                'metadata': {
-                    'processing_time_seconds': round(time.time() - start_time, 3),
-                    'text_length': len(text)
-                }
+                'score': basic_trust_score.get('score'),
+                'indicator': basic_trust_score.get('indicator'),
+                'explanation': basic_trust_score.get('explanation'),
+                'tip': "For a more comprehensive analysis, use the full analyze function."
             }
 
         except Exception as e:
-            return self._get_error_analysis_result(str(e), time.time() - start_time)
+            return {
+                'score': None,
+                'indicator': 'Error',
+                'explanation': [f"An error occurred during quick analysis: {str(e)}"],
+                'tip': "For a more comprehensive analysis, use the full analyze function."
+            }
 
     def analyze_headline_content_mismatch(self, headline: str, content: str) -> Dict:
         """
