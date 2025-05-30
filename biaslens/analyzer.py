@@ -5,7 +5,7 @@ from .bias import BiasDetector, BiasTypeClassifier
 from .patterns import NigerianPatterns, FakeNewsDetector, ViralityDetector
 from .trust import TrustScoreCalculator
 import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 
 class BiasLensAnalyzer:
