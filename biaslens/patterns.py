@@ -28,24 +28,25 @@ class NigerianPatterns:
         r"gone wrong", r"you need to see this", r"incredible footage"
     ]
 
+    # Combine and compile regex patterns for efficiency
+    _COMPILED_NIGERIAN_TRIGGERS = re.compile(
+        r'|'.join(f"(?:{p})" for p in NIGERIAN_TRIGGER_PHRASES),
+        re.IGNORECASE
+    )
+    _COMPILED_CLICKBAIT_PATTERNS = re.compile(
+        r'|'.join(f"(?:{p})" for p in CLICKBAIT_PATTERNS),
+        re.IGNORECASE
+    )
+
     @staticmethod
     def analyze_patterns(text: str) -> Dict:
         """Comprehensive pattern analysis for Nigerian context"""
-        text_lower = text.lower()
 
-        # Check for trigger phrases
-        trigger_matches = []
-        for pattern in NigerianPatterns.NIGERIAN_TRIGGER_PHRASES:
-            matches = re.findall(pattern, text_lower, re.IGNORECASE)
-            if matches:
-                trigger_matches.extend(matches)
+        # Use compiled regex for trigger phrases
+        trigger_matches = NigerianPatterns._COMPILED_NIGERIAN_TRIGGERS.findall(text)
 
-        # Check for clickbait patterns
-        clickbait_matches = []
-        for pattern in NigerianPatterns.CLICKBAIT_PATTERNS:
-            matches = re.findall(pattern, text_lower, re.IGNORECASE)
-            if matches:
-                clickbait_matches.extend(matches)
+        # Use compiled regex for clickbait patterns
+        clickbait_matches = NigerianPatterns._COMPILED_CLICKBAIT_PATTERNS.findall(text)
 
         # Calculate scores
         trigger_score = len(trigger_matches) / max(len(text.split()), 1) * 100
@@ -95,23 +96,23 @@ class FakeNewsDetector:
         r"scientists confirm", r"doctors warn"  # without specific names
     ]
 
+    _COMPILED_FAKE_PATTERNS = re.compile(
+        r'|'.join(f"(?:{p})" for p in FAKE_PATTERNS),
+        re.IGNORECASE
+    )
+    _COMPILED_CREDIBILITY_FLAGS = re.compile(
+        r'|'.join(f"(?:{p})" for p in CREDIBILITY_RED_FLAGS),
+        re.IGNORECASE
+    )
+
     @staticmethod
     def detect(text: str) -> Tuple[bool, Dict]:
         """Enhanced fake news detection with scoring"""
-        fake_matches = []
-        credibility_flags = []
+        # Use compiled regex for fake news patterns
+        fake_matches = FakeNewsDetector._COMPILED_FAKE_PATTERNS.findall(text)
 
-        # Check for fake news patterns
-        for pattern in FakeNewsDetector.FAKE_PATTERNS:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            if matches:
-                fake_matches.extend(matches)
-
-        # Check for credibility red flags
-        for pattern in FakeNewsDetector.CREDIBILITY_RED_FLAGS:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            if matches:
-                credibility_flags.extend(matches)
+        # Use compiled regex for credibility red flags
+        credibility_flags = FakeNewsDetector._COMPILED_CREDIBILITY_FLAGS.findall(text)
 
         # Calculate risk score
         total_words = len(text.split())
@@ -158,15 +159,16 @@ class ViralityDetector:
         r"millions have seen", r"shared \d+ times"
     ]
 
+    _COMPILED_VIRAL_PATTERNS = re.compile(
+        r'|'.join(f"(?:{p})" for p in VIRAL_PATTERNS),
+        re.IGNORECASE
+    )
+
     @staticmethod
     def analyze_virality(text: str) -> Dict:
         """Analyze viral manipulation patterns"""
-        viral_matches = []
-
-        for pattern in ViralityDetector.VIRAL_PATTERNS:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            if matches:
-                viral_matches.extend(matches)
+        # Use compiled regex for viral patterns
+        viral_matches = ViralityDetector._COMPILED_VIRAL_PATTERNS.findall(text)
 
         viral_score = (len(viral_matches) / max(len(text.split()), 1)) * 100
 
