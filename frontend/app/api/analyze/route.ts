@@ -1,7 +1,23 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
+import { spawn } from "child_process"
+import path from "path"
 import { createServerClient } from "@/lib/supabase"
+
+// Define the expected structure of the analysis result from the Python script
+interface AnalysisResult {
+  trustScore: number
+  sentiment: "positive" | "negative" | "neutral"
+  biasType: string
+  emotionalLanguage: string[]
+  misinformationFlag: boolean
+  explanation: string
+  summary: string
+  // Add any other fields that your Python script might return
+  // and are expected by the database or frontend.
+  // For example, if the Python script returns the 'indicator' or 'tip'
+  // from the quick_analyze example, you might want them here.
+}
+
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,46 +27,66 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Text and user ID are required" }, { status: 400 })
     }
 
-    // AI Analysis using OpenAI
-    const { text: analysisResult } = await generateText({
-      model: openai("gpt-4o"),
-      system: `You are BiaLens, an expert AI system that analyzes text for bias, sentiment, and misinformation. 
+    // Path to the Python script - ensure this is correct
+    // __dirname in ES modules for server components might be tricky.
+    // Using process.cwd() and then constructing path might be more reliable for Next.js server routes.
+    // The script is in biaslens/analyzer.py, relative to the root of the project.
+    // Current file: frontend/app/api/analyze/route.ts
+    // process.cwd() should be the project root.
+    const projectRoot = process.cwd()
+    const scriptPath = path.join(projectRoot, "biaslens", "analyzer.py")
+    // Alternative if analyzer.py is not directly executable with text arg:
+    // const scriptPath = path.join(projectRoot, "biaslens", "cli_runner.py");
 
-Analyze the provided text and return a JSON response with the following structure:
-{
-  "trustScore": number (0-100),
-  "sentiment": "positive" | "negative" | "neutral",
-  "biasType": string (e.g., "political", "racial", "gender", "none"),
-  "emotionalLanguage": string[] (array of detected emotional phrases),
-  "misinformationFlag": boolean,
-  "explanation": string (detailed explanation of findings),
-  "summary": string (objective summary of the text)
-}
 
-Guidelines:
-- Trust score should be lower for highly biased, emotional, or potentially misleading content
-- Identify specific emotional language and loaded phrases
-- Flag potential misinformation based on unsubstantiated claims, conspiracy theories, or manipulative language
-- Provide clear, educational explanations
-- Keep the summary objective and factual`,
-      prompt: `Analyze this text for bias, sentiment, and misinformation:\n\n"${text}"`,
+    const analysis = await new Promise<AnalysisResult>((resolve, reject) => {
+      // Try 'python3' first, then 'python' if 'python3' is not found or fails.
+      // For simplicity, we'll try python3 here. Robust checking might be needed.
+      const pythonExecutable = "python3" // Or "python" as a fallback
+
+      // Ensure analyzer.py is executable and accepts text as a command line argument,
+      // and prints JSON to stdout.
+      const pythonProcess = spawn(pythonExecutable, [scriptPath, text])
+
+      let stdoutData = ""
+      let stderrData = ""
+
+      pythonProcess.stdout.on("data", (data) => {
+        stdoutData += data.toString()
+      })
+
+      pythonProcess.stderr.on("data", (data) => {
+        stderrData += data.toString()
+      })
+
+      pythonProcess.on("close", (code) => {
+        if (code === 0) {
+          try {
+            const result = JSON.parse(stdoutData)
+            resolve(result)
+          } catch (parseError) {
+            console.error("JSON parsing error:", parseError)
+            console.error("Python stdout:", stdoutData)
+            console.error("Python stderr:", stderrData)
+            reject(new Error("Failed to parse Python script output."))
+          }
+        } else {
+          console.error(`Python script exited with code ${code}`)
+          console.error("Python stderr:", stderrData)
+          console.error("Python stdout:", stdoutData) // Also log stdout in case of error
+          reject(new Error(`Python script error: ${stderrData || "Unknown error"}`))
+        }
+      })
+
+      pythonProcess.on("error", (error) => {
+        console.error("Failed to start Python process:", error)
+        if ((error as any).code === 'ENOENT') {
+          reject(new Error(`Python executable (${pythonExecutable}) not found. Please ensure Python is installed and in PATH.`))
+        } else {
+          reject(new Error("Failed to start Python script."))
+        }
+      })
     })
-
-    let analysis
-    try {
-      analysis = JSON.parse(analysisResult)
-    } catch (parseError) {
-      // Fallback if JSON parsing fails
-      analysis = {
-        trustScore: 50,
-        sentiment: "neutral",
-        biasType: "unknown",
-        emotionalLanguage: [],
-        misinformationFlag: false,
-        explanation: "Analysis completed but formatting error occurred.",
-        summary: text.substring(0, 200) + "...",
-      }
-    }
 
     // Save to database
     const supabase = createServerClient()
