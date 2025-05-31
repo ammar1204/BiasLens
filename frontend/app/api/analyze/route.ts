@@ -1,123 +1,146 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { spawn } from "child_process"
-import path from "path"
-import { createServerClient } from "@/lib/supabase"
+import { type NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase"; // For saving to DB
 
-// Define the expected structure of the analysis result from the Python script
+// Keep or adjust AnalysisResult interface as needed based on Python output
 interface AnalysisResult {
-  trustScore: number
-  sentiment: "positive" | "negative" | "neutral"
-  biasType: string
-  emotionalLanguage: string[]
-  misinformationFlag: boolean
-  explanation: string
-  summary: string
-  // Add any other fields that your Python script might return
-  // and are expected by the database or frontend.
-  // For example, if the Python script returns the 'indicator' or 'tip'
-  // from the quick_analyze example, you might want them here.
+  trust_score: number; // Adjusted to match Python output (snake_case)
+  indicator: string; // Adjusted to match Python output (sentiment -> indicator)
+  primary_bias_type: string; // Adjusted to match Python output
+  explanation: string[]; // Adjusted to match Python output (can be string[])
+  tip: string; // Adjusted to match Python output (summary -> tip)
+  // metadata: object; // Python also returns a metadata object, ensure it's handled or defined if needed
+  // Fields like emotionalLanguage, misinformationFlag are part of detailed_sub_analyses or calculated differently now.
+  // The client-side AnalysisResult might need further adaptation based on what Python's `analyze` returns.
+  // For now, this reflects the primary fields from Python's `final_result`.
+  // Let's assume the python `analyze` function returns these keys directly or they are mapped before this point.
+  // If Python returns 'sentiment' and 'biasType', the interface should reflect that.
+  // Based on biaslens/analyzer.py, the main 'analyze' returns:
+  // 'trust_score', 'indicator', 'explanation', 'tip', 'primary_bias_type', 'metadata'
+  // 'emotionalLanguage' and 'misinformationFlag' are not top-level keys in the final_result.
+  // They are within detailed_sub_analyses or pattern_result.
+  // For Supabase, we need to map them correctly.
+}
+
+// Interface for what Supabase expects/returns, which might be different from Python's raw output
+interface DbAnalysisRecord {
+  id: string;
+  user_id: string;
+  original_text: string;
+  trust_score: number;
+  sentiment: string; // This is 'indicator' from Python
+  bias_type: string; // This is 'primary_bias_type' from Python
+  emotional_language: string[]; // This needs to be sourced if required
+  misinformation_flag: boolean; // This needs to be sourced if required
+  explanation: string; // Python 'explanation' is string[]
+  ai_summary: string; // This is 'tip' from Python
+  created_at: string;
 }
 
 
 export async function POST(request: NextRequest) {
   try {
-    const { text, userId } = await request.json()
+    const { text, userId } = await request.json();
 
     if (!text || !userId) {
-      return NextResponse.json({ error: "Text and user ID are required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Text and user ID are required" },
+        { status: 400 }
+      );
     }
 
-    // Path to the Python script - ensure this is correct
-    // __dirname in ES modules for server components might be tricky.
-    // Using process.cwd() and then constructing path might be more reliable for Next.js server routes.
-    // The script is in biaslens/analyzer.py, relative to the root of the project.
-    // Current file: frontend/app/api/analyze/route.ts
-    // process.cwd() should be the project root.
-    const projectRoot = process.cwd()
-    const scriptPath = path.join(projectRoot, "biaslens", "analyzer.py")
-    // Alternative if analyzer.py is not directly executable with text arg:
-    // const scriptPath = path.join(projectRoot, "biaslens", "cli_runner.py");
+    const apiBaseUrl = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
+    const pythonApiUrl = `${apiBaseUrl}/api/analyze`;
 
-    const analysis = await new Promise<AnalysisResult>((resolve, reject) => {
-      // Try 'python3' first, then 'python' if 'python3' is not found or fails.
-      // For simplicity, we'll try python3 here. Robust checking might be needed.
-      const pythonExecutable = "python3" // Or "python" as a fallback
+    const pythonResponse = await fetch(pythonApiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text: text }),
+    });
 
-      // Ensure analyzer.py is executable and accepts text as a command line argument,
-      // and prints JSON to stdout.
-      const pythonProcess = spawn(pythonExecutable, [scriptPath, text])
+    if (!pythonResponse.ok) {
+      const errorData = await pythonResponse.json();
+      console.error("Python API error (analyze):", errorData);
+      throw new Error(errorData.error || "Analysis by Python script failed");
+    }
 
-      let stdoutData = ""
-      let stderrData = ""
+    // Assuming pythonResponse.json() directly matches the expected structure from Python's analyze
+    // Keys from python: 'trust_score', 'indicator', 'explanation', 'tip', 'primary_bias_type', 'metadata'
+    const analysisFromPython = await pythonResponse.json();
 
-      pythonProcess.stdout.on("data", (data) => {
-        stdoutData += data.toString()
-      })
+    // Map Python output to the fields expected by Supabase
+    // This requires careful mapping based on what `biaslens/analyzer.py` actually returns
+    // and what the database schema expects.
+    const supabasePayload = {
+      user_id: userId,
+      original_text: text,
+      trust_score: analysisFromPython.trust_score,
+      sentiment: analysisFromPython.indicator, // Map 'indicator' to 'sentiment' for DB
+      bias_type: analysisFromPython.primary_bias_type, // Map 'primary_bias_type' to 'bias_type'
+      // emotional_language and misinformation_flag are not directly in python's final_result top level.
+      // They would need to be extracted from `detailed_sub_analyses` if that was included,
+      // or handled differently. For now, let's use placeholders or assume they are not critical for DB.
+      emotional_language: analysisFromPython.metadata?.detailed_sub_analyses?.emotion?.keywords || [], // Example placeholder
+      misinformation_flag: analysisFromPython.metadata?.detailed_sub_analyses?.patterns?.fake_news?.detected || false, // Example placeholder
+      explanation: Array.isArray(analysisFromPython.explanation) ? analysisFromPython.explanation.join('\n') : analysisFromPython.explanation,
+      ai_summary: analysisFromPython.tip, // Map 'tip' to 'ai_summary'
+    };
 
-      pythonProcess.stderr.on("data", (data) => {
-        stderrData += data.toString()
-      })
-
-      pythonProcess.on("close", (code) => {
-        if (code === 0) {
-          try {
-            const result = JSON.parse(stdoutData)
-            resolve(result)
-          } catch (parseError) {
-            console.error("JSON parsing error:", parseError)
-            console.error("Python stdout:", stdoutData)
-            console.error("Python stderr:", stderrData)
-            reject(new Error("Failed to parse Python script output."))
-          }
-        } else {
-          console.error(`Python script exited with code ${code}`)
-          console.error("Python stderr:", stderrData)
-          console.error("Python stdout:", stdoutData) // Also log stdout in case of error
-          reject(new Error(`Python script error: ${stderrData || "Unknown error"}`))
-        }
-      })
-
-      pythonProcess.on("error", (error) => {
-        console.error("Failed to start Python process:", error)
-        if ((error as any).code === 'ENOENT') {
-          reject(new Error(`Python executable (${pythonExecutable}) not found. Please ensure Python is installed and in PATH.`))
-        } else {
-          reject(new Error("Failed to start Python script."))
-        }
-      })
-    })
-
-    // Save to database
-    const supabase = createServerClient()
-    const { data, error } = await supabase
+    const supabase = createServerClient();
+    const { data: dbData, error: dbError } = await supabase
       .from("analysis_history")
-      .insert({
-        user_id: userId,
-        original_text: text,
-        trust_score: analysis.trustScore,
-        sentiment: analysis.sentiment,
-        bias_type: analysis.biasType,
-        emotional_language: analysis.emotionalLanguage,
-        misinformation_flag: analysis.misinformationFlag,
-        explanation: analysis.explanation,
-        ai_summary: analysis.summary,
-      })
+      .insert(supabasePayload)
       .select()
-      .single()
+      .single();
 
-    if (error) {
-      console.error("Database error:", error)
-      return NextResponse.json({ error: "Failed to save analysis" }, { status: 500 })
+    if (dbError) {
+      console.error("Database error:", dbError);
+      // Log more details for debugging
+      console.error("Supabase payload:", supabasePayload);
+      console.error("Python analysis result for DB insertion:", analysisFromPython);
+      return NextResponse.json(
+        { error: `Failed to save analysis: ${dbError.message}` },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({
-      id: data.id,
-      ...analysis,
-      createdAt: data.created_at,
-    })
+    // Construct the final response to the client
+    // It should match what the client-side `AnalysisResult` interface expects (on AnalyzePage.tsx)
+    // Client `AnalysisResult`: id, trustScore, sentiment, biasType, emotionalLanguage, misinformationFlag, explanation, summary, createdAt
+    const clientResponse: {
+      id: string;
+      trustScore: number;
+      sentiment: string;
+      biasType: string;
+      emotionalLanguage: string[];
+      misinformationFlag: boolean;
+      explanation: string;
+      summary: string;
+      createdAt: string;
+    } = {
+      id: dbData.id,
+      trustScore: dbData.trust_score,
+      sentiment: dbData.sentiment,
+      biasType: dbData.bias_type,
+      emotionalLanguage: dbData.emotional_language,
+      misinformationFlag: dbData.misinformation_flag,
+      explanation: dbData.explanation,
+      summary: dbData.ai_summary,
+      createdAt: dbData.created_at,
+    };
+
+    return NextResponse.json(clientResponse);
+
   } catch (error) {
-    console.error("Analysis error:", error)
-    return NextResponse.json({ error: "Failed to analyze text" }, { status: 500 })
+    console.error("Main analysis endpoint error:", error);
+    let errorMessage = "Failed to analyze text";
+    if (error instanceof Error) {
+        errorMessage = error.message;
+    }
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

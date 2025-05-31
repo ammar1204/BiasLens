@@ -1,4 +1,5 @@
 
+from flask import Flask, request, jsonify
 from .sentiment import SentimentAnalyzer
 from .emotion import EmotionClassifier
 from .bias import BiasDetector, BiasTypeClassifier
@@ -9,6 +10,9 @@ from typing import Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Create Flask app instance
+app = Flask(__name__)
 
 class BiasLensAnalyzer:
     """
@@ -573,26 +577,48 @@ def quick_analyze(text: str) -> Dict:
     return _global_analyzer.quick_analyze(text)
 
 
-if __name__ == "__main__":
-    import sys
-    import json
+@app.route("/api/analyze", methods=["POST"])
+def handle_analyze():
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"error": "Missing 'text' in request body"}), 400
 
-    if len(sys.argv) != 3:
-        print("Usage: python analyzer.py <analyze|quick_analyze> <text_to_analyze>", file=sys.stderr)
-        sys.exit(1)
+    text_to_analyze = data["text"]
+    # TODO: Consider making include_patterns, headline, include_detailed_results configurable via API
+    # For now, using defaults for the global analyze function:
+    # analyze(text: str, include_patterns: bool = True, headline: Optional[str] = None, include_detailed_results: bool = False)
+    result = analyze(text_to_analyze, include_patterns=True, headline=None, include_detailed_results=False)
+    return jsonify(result)
 
-    function_to_call = sys.argv[1]
-    text_input = sys.argv[2]
+@app.route("/api/quick_analyze", methods=["POST"])
+def handle_quick_analyze():
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"error": "Missing 'text' in request body"}), 400
 
-    result = None
-    if function_to_call == "analyze":
-        # The existing global 'analyze' function can take more arguments,
-        # but for CLI, we'll use defaults for include_patterns, headline, etc.
-        result = analyze(text_input)
-    elif function_to_call == "quick_analyze":
-        result = quick_analyze(text_input)
-    else:
-        print(f"Unknown function: {function_to_call}. Choose 'analyze' or 'quick_analyze'.", file=sys.stderr)
-        sys.exit(1)
+    text_to_analyze = data["text"]
+    result = quick_analyze(text_to_analyze) # Uses the global quick_analyze function
+    return jsonify(result)
 
-    print(json.dumps(result))
+# The old if __name__ == "__main__": block is removed as Vercel will use the 'app' object.
+# if __name__ == "__main__":
+#     import sys
+#     import json
+#
+#     if len(sys.argv) != 3:
+#         print("Usage: python analyzer.py <analyze|quick_analyze> <text_to_analyze>", file=sys.stderr)
+#         sys.exit(1)
+#
+#     function_to_call = sys.argv[1]
+#     text_input = sys.argv[2]
+#
+#     result = None
+#     if function_to_call == "analyze":
+#         result = analyze(text_input)
+#     elif function_to_call == "quick_analyze":
+#         result = quick_analyze(text_input)
+#     else:
+#         print(f"Unknown function: {function_to_call}. Choose 'analyze' or 'quick_analyze'.", file=sys.stderr)
+#         sys.exit(1)
+#
+#     print(json.dumps(result))
