@@ -6,7 +6,9 @@ from .patterns import NigerianPatterns, FakeNewsDetector, ViralityDetector
 from .trust import TrustScoreCalculator
 import time
 from typing import Dict, Optional
+import logging
 
+logger = logging.getLogger(__name__)
 
 class BiasLensAnalyzer:
     """
@@ -28,7 +30,7 @@ class BiasLensAnalyzer:
     def sentiment_analyzer(self):
         """Lazy load sentiment analyzer"""
         if self._sentiment_analyzer is None:
-            print("[BiasLensAnalyzer] Initializing SentimentAnalyzer...")
+            logger.info("Initializing SentimentAnalyzer...")
             self._sentiment_analyzer = SentimentAnalyzer()
             self._initialized_components.add('sentiment')
         return self._sentiment_analyzer
@@ -37,7 +39,7 @@ class BiasLensAnalyzer:
     def emotion_classifier(self):
         """Lazy load emotion classifier"""
         if self._emotion_classifier is None:
-            print("[BiasLensAnalyzer] Initializing EmotionClassifier...")
+            logger.info("Initializing EmotionClassifier...")
             self._emotion_classifier = EmotionClassifier()
             self._initialized_components.add('emotion')
         return self._emotion_classifier
@@ -46,7 +48,7 @@ class BiasLensAnalyzer:
     def bias_detector(self):
         """Lazy load bias detector"""
         if self._bias_detector is None:
-            print("[BiasLensAnalyzer] Initializing BiasDetector...")
+            logger.info("Initializing BiasDetector...")
             self._bias_detector = BiasDetector()
             self._initialized_components.add('bias_detection')
         return self._bias_detector
@@ -55,13 +57,13 @@ class BiasLensAnalyzer:
     def bias_type_classifier(self):
         """Lazy load bias type classifier"""
         if self._bias_type_classifier is None:
-            print("[BiasLensAnalyzer] Initializing BiasTypeClassifier...")
+            logger.info("Initializing BiasTypeClassifier...")
             self._bias_type_classifier = BiasTypeClassifier()
             self._initialized_components.add('bias_classification')
         return self._bias_type_classifier
 
     def analyze(self, text: str, include_patterns: bool = True,
-                headline: Optional[str] = None) -> Dict:
+                headline: Optional[str] = None, include_detailed_results: bool = False) -> Dict:
         """
         Comprehensive analysis of text for bias, manipulation, and trustworthiness.
 
@@ -69,6 +71,7 @@ class BiasLensAnalyzer:
             text: The main text to analyze
             include_patterns: Whether to include Nigerian-specific pattern analysis
             headline: Optional headline for headline vs content comparison
+            include_detailed_results: If True, includes raw results from sub-analyzers.
 
         Returns:
             Dict containing all analysis results and overall assessment
@@ -128,7 +131,7 @@ class BiasLensAnalyzer:
 
             overall_processing_time = round(time.time() - overall_start_time, 4)
 
-            return {
+            final_result = {
                 'trust_score': trust_result.get('score'),
                 'indicator': trust_result.get('indicator'),
                 'explanation': trust_result.get('explanation'),
@@ -142,8 +145,22 @@ class BiasLensAnalyzer:
                 }
             }
 
+            if include_detailed_results:
+                final_result['detailed_sub_analyses'] = {
+                    'sentiment': sentiment_result,
+                    'emotion': emotion_result,
+                    'bias': bias_result
+                }
+                if include_patterns and pattern_result: # pattern_result might be {}
+                    final_result['detailed_sub_analyses']['patterns'] = pattern_result
+                elif include_patterns: # if include_patterns is True but pattern_result is empty (e.g. error)
+                     final_result['detailed_sub_analyses']['patterns'] = {}
+
+            return final_result
+
         except Exception as e:
             overall_processing_time = round(time.time() - overall_start_time, 4)
+            logger.error(f"Analysis failed due to an unexpected error: {str(e)}", exc_info=True)
             return {
                 'trust_score': None,
                 'indicator': 'Error',
@@ -513,7 +530,7 @@ _global_analyzer = BiasLensAnalyzer()
 
 
 # Convenience function for direct usage
-def analyze(text: str, include_patterns: bool = True, headline: Optional[str] = None) -> Dict:
+def analyze(text: str, include_patterns: bool = True, headline: Optional[str] = None, include_detailed_results: bool = False) -> Dict:
     """
     Direct analysis function - uses a global analyzer instance to run analysis.
 
@@ -521,12 +538,13 @@ def analyze(text: str, include_patterns: bool = True, headline: Optional[str] = 
         text: Text to analyze
         include_patterns: Whether to include Nigerian pattern analysis
         headline: Optional headline for comparison
+        include_detailed_results: If True, includes raw results from sub-analyzers.
 
     Returns:
         Complete analysis results
     """
     # Uses the global analyzer instance
-    return _global_analyzer.analyze(text, include_patterns, headline)
+    return _global_analyzer.analyze(text, include_patterns, headline, include_detailed_results)
 
 
 # Quick analysis function
