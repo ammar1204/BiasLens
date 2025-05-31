@@ -579,7 +579,16 @@ def quick_analyze(text: str) -> Dict:
 
 @app.route("/api/analyze", methods=["POST"])
 def handle_analyze():
-    data = request.get_json()
+    print("[Python Flask App] Request received for /api/analyze")
+    try:
+        data = request.get_json()
+        print(f"[Python Flask App /api/analyze] Received text (first 50 chars): {data.get('text', '')[:50]}")
+    except Exception as e:
+        print(f"[Python Flask App /api/analyze] Error getting JSON: {e}")
+        # Still proceed to return error for missing text, or let the original check handle it.
+        # The original check is fine.
+
+    data = request.get_json() # This might be redundant if already called in try-except, but safe.
     if not data or "text" not in data:
         return jsonify({"error": "Missing 'text' in request body"}), 400
 
@@ -587,18 +596,25 @@ def handle_analyze():
     # TODO: Consider making include_patterns, headline, include_detailed_results configurable via API
     # For now, using defaults for the global analyze function:
     # analyze(text: str, include_patterns: bool = True, headline: Optional[str] = None, include_detailed_results: bool = False)
-    result = analyze(text_to_analyze, include_patterns=True, headline=None, include_detailed_results=False)
-    return jsonify(result)
+    # result = analyze(text_to_analyze, include_patterns=True, headline=None, include_detailed_results=False) # Commented out for testing
+    return jsonify({"message": "Python /api/analyze test successful", "status": "ok", "source": "simplified_python_test"})
 
 @app.route("/api/quick_analyze", methods=["POST"])
 def handle_quick_analyze():
-    data = request.get_json()
+    print("[Python Flask App] Request received for /api/quick_analyze")
+    try:
+        data = request.get_json()
+        print(f"[Python Flask App /api/quick_analyze] Received text (first 50 chars): {data.get('text', '')[:50]}")
+    except Exception as e:
+        print(f"[Python Flask App /api/quick_analyze] Error getting JSON: {e}")
+
+    data = request.get_json() # Redundant if already called, but safe.
     if not data or "text" not in data:
         return jsonify({"error": "Missing 'text' in request body"}), 400
 
-    text_to_analyze = data["text"]
-    result = quick_analyze(text_to_analyze) # Uses the global quick_analyze function
-    return jsonify(result)
+    # text_to_analyze = data["text"] # Can be commented if not used for static response
+    # result = quick_analyze(text_to_analyze) # Commented out for testing
+    return jsonify({"message": "Python /api/quick_analyze test successful", "status": "ok", "source": "simplified_python_test"})
 
 # The old if __name__ == "__main__": block is removed as Vercel will use the 'app' object.
 # if __name__ == "__main__":
