@@ -104,16 +104,15 @@ To run the web frontend:
     ```bash
     cd frontend
     ```
-2.  Ensure all dependencies, including Flask, are installed:
+2.  Install the necessary dependencies using PNPM:
     ```bash
-    pip install -r ../requirements.txt
+    pnpm install
     ```
-    (Note: an alternative is to run `pip install Flask` if you've already installed other requirements)
-3.  Run the Flask application:
+3.  Run the Next.js development server:
     ```bash
-    python app.py
+    pnpm run dev
     ```
-4.  Open your web browser and go to `http://127.0.0.1:5000/` to use the analyzer.
+4.  Open your web browser and go to `http://localhost:3000/` (or the port specified in your terminal if different) to use the analyzer.
 
 ## Project Structure
 ```
@@ -128,15 +127,26 @@ biaslens/
 │   ├── sentiment.py     # Functions for sentiment analysis
 │   ├── trust.py         # Logic for calculating trust scores
 │   └── utils.py         # Utility functions for the biaslens package
+├── frontend/
+│   ├── app/             # Next.js App Router directory (pages, layouts)
+│   ├── components/      # Reusable UI components
+│   ├── public/          # Static assets (images, fonts, etc.)
+│   ├── styles/          # Global styles and CSS modules
+│   ├── lib/             # Utility functions and libraries for the frontend
+│   ├── next.config.mjs  # Next.js configuration file
+│   ├── package.json     # Project metadata and dependencies
+│   ├── pnpm-lock.yaml   # PNPM lock file for consistent installs
+│   ├── tsconfig.json    # TypeScript configuration
+│   └── README.md        # Frontend specific README (if any)
 ├── tests/
 │   ├── __init__.py      # Makes 'tests' a Python package
 │   └── test_analyzer.py # Unit tests for the analyzer
 ├── .idea/                 # IDE-specific settings (usually ignored)
-├── requirements.txt     # Project dependencies
+├── requirements.txt     # Project dependencies for the Python backend
 ├── test.py                # Root level test script (potentially for integration or older tests)
 └── README.md            # This file
 ```
-- **`biaslens/`**: The main package directory.
+- **`biaslens/`**: The main Python package directory for the backend.
     - **`__init__.py`**: Initializes the `biaslens` package.
     - **`analyzer.py`**: Contains the core logic for text analysis, including the `quick_analyze` and `analyze` functions.
     - **`bias.py`**: Defines different bias categories (e.g., political, gender, ethnic) and any specific logic related to them.
@@ -146,12 +156,23 @@ biaslens/
     - **`sentiment.py`**: Provides functions for sentiment analysis of text.
     - **`trust.py`**: Contains logic related to the calculation of trust scores for analyzed text.
     - **`utils.py`**: Helper functions used across the `biaslens` package.
-- **`tests/`**: Contains unit tests for the project.
+- **`frontend/`**: The Next.js frontend application.
+    - **`app/`**: Contains the core application routes, pages, and layouts, following the Next.js App Router conventions.
+    - **`components/`**: Houses reusable UI components used throughout the frontend.
+    - **`public/`**: Stores static assets like images, fonts, and other files that are served directly.
+    - **`styles/`**: Includes global stylesheets, CSS modules, or other styling-related files.
+    - **`lib/`**: Often used for utility functions, helper scripts, or client-side libraries specific to the frontend.
+    - **`next.config.mjs`**: The configuration file for Next.js, allowing customization of its behavior.
+    - **`package.json`**: Lists project dependencies, scripts (like `dev`, `build`, `start`), and other metadata for the frontend.
+    - **`pnpm-lock.yaml`**: Ensures deterministic installs of frontend dependencies when using PNPM.
+    - **`tsconfig.json`**: TypeScript configuration file, if the frontend is using TypeScript.
+    - **`README.md`**: May contain specific instructions or information about the frontend part of the project.
+- **`tests/`**: Contains unit tests for the Python backend.
     - **`__init__.py`**: Initializes the `tests` package.
     - **`test_analyzer.py`**: Includes tests specifically for the functions in `analyzer.py`.
-- **`requirements.txt`**: Lists all Python dependencies required to run the project.
-- **`test.py`**: A script in the root directory, possibly used for running integration tests or as an older testing file.
-- **`README.md`**: Provides an overview of the project, installation instructions, usage examples, and other relevant information.
+- **`requirements.txt`**: Lists all Python dependencies required to run the backend of the project.
+- **`test.py`**: A script in the root directory, possibly used for running integration tests or as an older testing file for the backend. Unit tests for the Python backend are primarily located in `tests/test_analyzer.py`.
+- **`README.md`**: Provides an overview of the entire project, installation instructions, usage examples, and other relevant information.
 
 ## Models Used
 BiasLens utilizes the following Hugging Face models:
@@ -163,6 +184,20 @@ BiasLens utilizes the following Hugging Face models:
 - Detection and classification of a wider range of bias types (e.g., ageism, religious bias).
 - Integration with social media platforms for real-time bias analysis.
 - Customizable bias thresholds.
+
+## Contributing
+We welcome contributions to BiasLens! If you'd like to help improve the tool or add new features, please follow these general steps:
+
+1.  **Fork the repository** on GitHub.
+2.  **Create a new branch** for your feature or bug fix:
+    ```bash
+    git checkout -b your-feature-name
+    ```
+3.  **Make your changes** and commit them with clear messages.
+4.  **Ensure your changes are well-tested.** If adding new functionality, please include relevant tests.
+5.  **Open a pull request** against the main branch of the original repository.
+
+We'll review your contributions and work with you to get them merged.
 
 ## License
 This project is currently unlicensed. Please consider adding an open-source license if you plan to share or distribute this code.
