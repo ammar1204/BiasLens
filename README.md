@@ -38,12 +38,12 @@ for result in results:
 **Example Output (Quick Analysis):**
 ```
 Quick Analysis Results:
-- Toxicity: 0.0006
-- Severe Toxicity: 0.0000
-- Obscene: 0.0001
-- Threat: 0.0000
-- Insult: 0.0002
-- Identity Attack: 0.0001
+{
+    'score': 75,
+    'indicator': '🟡 Caution',
+    'explanation': ['Contains suspicious Nigerian expressions', 'Contains clickbait patterns'],
+    'tip': 'For a more comprehensive analysis, use the full analyze function.'
+}
 ```
 
 ### Comprehensive Analysis
@@ -69,12 +69,30 @@ else:
 **Example Output (Comprehensive Analysis):**
 ```
 Comprehensive Analysis Results:
-Text: This is another sample text which might contain some subtle biases.
-Trust Score: 0.8500
-Bias Classification:
-- Political: 0.1200
-- Gender: 0.0500
-- Ethnic: 0.0300
+{
+    'trust_score': 65,
+    'indicator': '🟡 Caution',
+    'explanation': [
+        'Potential bias detected in language patterns.',
+        'Content is emotionally charged.',
+        'Contains Nigerian expressions commonly used in misleading content.'
+    ],
+    'tip': 'Verify this content from additional sources before trusting it fully.',
+    'metadata': {
+        'component_processing_times': {
+            'sentiment_analysis': 0.0123,
+            'emotion_analysis': 0.0456,
+            'bias_analysis': 0.0789,
+            'pattern_analysis': 0.0012,
+            'trust_score_calculation': 0.0034,
+            'overall_assessment_generation': 0.0005
+        },
+        'overall_processing_time_seconds': 0.1420,
+        'text_length': 120,
+        'initialized_components': ['sentiment', 'emotion', 'bias_detection', 'bias_classification'],
+        'analysis_timestamp': 1678886400.0
+    }
+}
 ```
 *(Note: The example outputs are illustrative and may vary based on the models and text.)*
 
@@ -145,6 +163,9 @@ BiasLens utilizes the following Hugging Face models:
 - Detection and classification of a wider range of bias types (e.g., ageism, religious bias).
 - Integration with social media platforms for real-time bias analysis.
 - Customizable bias thresholds.
+
+## License
+This project is currently unlicensed. Please consider adding an open-source license if you plan to share or distribute this code.
 
 ## Hackathon Project
 This library was developed as part of a hackathon. We aimed to create a simple yet effective tool for identifying potential bias in textual content.
