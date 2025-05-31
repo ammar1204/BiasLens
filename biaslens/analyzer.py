@@ -131,11 +131,22 @@ class BiasLensAnalyzer:
 
             overall_processing_time = round(time.time() - overall_start_time, 4)
 
+            primary_bias_type_value = None # Default
+            if bias_result.get('flag'):
+                bias_type_info = bias_result.get('type_analysis', {})
+                detected_type = bias_type_info.get('type')
+                if detected_type and detected_type not in ['neutral', 'no bias', 'analysis_error']:
+                    primary_bias_type_value = detected_type
+                elif detected_type in ['neutral', 'no bias']:
+                    primary_bias_type_value = "neutral"
+                # if 'analysis_error' or None, it remains None or its previous default
+
             final_result = {
                 'trust_score': trust_result.get('score'),
                 'indicator': trust_result.get('indicator'),
                 'explanation': trust_result.get('explanation'),
                 'tip': trust_result.get('tip'),
+                'primary_bias_type': primary_bias_type_value, # New key
                 'metadata': {
                     'component_processing_times': component_processing_times,
                     'overall_processing_time_seconds': overall_processing_time,
