@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "frontend/next.config.mjs",
+      "use": "@vercel/next"
+    },
+    {
+      "src": "biaslens/analyzer.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb",
+        "runtime": "python3.9"
+      }
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/analyze",
+      "destination": "/biaslens/analyzer.py"
+    },
+    {
+      "source": "/api/quick_analyze",
+      "destination": "/biaslens/analyzer.py"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/frontend/next.config.mjs"
+    }
+  ]
+}
