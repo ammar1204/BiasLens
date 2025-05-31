@@ -27,6 +27,9 @@ export async function POST(request: NextRequest) {
 
     const pythonApiUrl = `${apiBaseUrl}/api/quick_analyze`;
 
+    console.log(`[Next.js API /api/quick_analyze] Attempting to fetch: ${pythonApiUrl}`);
+    console.log(`[Next.js API /api/quick_analyze] Request body for Python: ${JSON.stringify({ text: text })}`);
+
     const pythonResponse = await fetch(pythonApiUrl, {
       method: "POST",
       headers: {
@@ -38,6 +41,7 @@ export async function POST(request: NextRequest) {
     if (!pythonResponse.ok) {
       const errorData = await pythonResponse.json();
       console.error("Python API error (quick_analyze):", errorData);
+      console.error(`[Next.js API /api/quick_analyze] Python API response status: ${pythonResponse.status}`);
       throw new Error(errorData.error || "Quick analysis by Python script failed");
     }
 
@@ -54,6 +58,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error("Quick analysis endpoint error:", error);
+    console.error(`[Next.js API /api/quick_analyze] Error in POST handler:`, error);
     let errorMessage = "Failed to perform quick analysis.";
     if (error instanceof Error) {
         errorMessage = error.message;

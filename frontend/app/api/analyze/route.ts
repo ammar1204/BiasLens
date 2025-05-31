@@ -54,6 +54,9 @@ export async function POST(request: NextRequest) {
 
     const pythonApiUrl = `${apiBaseUrl}/api/analyze`;
 
+    console.log(`[Next.js API /api/analyze] Attempting to fetch: ${pythonApiUrl}`);
+    console.log(`[Next.js API /api/analyze] Request body for Python: ${JSON.stringify({ text: text })}`);
+
     const pythonResponse = await fetch(pythonApiUrl, {
       method: "POST",
       headers: {
@@ -65,6 +68,7 @@ export async function POST(request: NextRequest) {
     if (!pythonResponse.ok) {
       const errorData = await pythonResponse.json();
       console.error("Python API error (analyze):", errorData);
+      console.error(`[Next.js API /api/analyze] Python API response status: ${pythonResponse.status}`);
       throw new Error(errorData.error || "Analysis by Python script failed");
     }
 
@@ -137,6 +141,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error("Main analysis endpoint error:", error);
+    console.error(`[Next.js API /api/analyze] Error in POST handler:`, error);
     let errorMessage = "Failed to analyze text";
     if (error instanceof Error) {
         errorMessage = error.message;
