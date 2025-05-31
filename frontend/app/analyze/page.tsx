@@ -85,6 +85,70 @@ export default function AnalyzePage() {
     }
   }
 
+  // Add this new handler function within AnalyzePage component
+  const handleQuickAnalyze = async () => {
+    if (!text.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter some text to analyze",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAnalyzing(true);
+    setResult(null); // Clear previous results
+
+    try {
+      const response = await fetch("/api/quick_analyze", { // Changed endpoint
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: text.trim(),
+          userId: user?.id, // userId might not be used by quick_analyze endpoint but sent for consistency
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Quick analysis failed");
+      }
+
+      const quickResult = await response.json();
+
+      // Map quickResult to the existing AnalysisResult structure
+      // Some fields will be missing or adapted
+      const mappedResult: Partial<AnalysisResult> = {
+        // id and createdAt would typically come if it were saved and returned by DB
+        trustScore: quickResult.score,
+        sentiment: quickResult.indicator, // Or map more appropriately if needed
+        biasType: "N/A for Quick Analysis", // Placeholder
+        emotionalLanguage: [], // Placeholder
+        misinformationFlag: false, // Placeholder, unless quick_analyze provides this
+        explanation: Array.isArray(quickResult.explanation) ? quickResult.explanation.join("\\n") : quickResult.explanation,
+        summary: quickResult.tip, // Using 'tip' as a summary
+      };
+
+      setResult(mappedResult as AnalysisResult); // Cast, acknowledging missing fields
+
+      toast({
+        title: "Quick Analysis Complete",
+        description: "Your text has been quickly analyzed!",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to perform quick analysis. Please try again.",
+        variant: "destructive",
+      });
+      setResult(null); // Clear result on error
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   const getTrustScoreColor = (score: number) => {
     if (score >= 70) return "text-green-600"
     if (score >= 40) return "text-yellow-600"
@@ -142,7 +206,7 @@ export default function AnalyzePage() {
           />
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted-foreground">{text.length}/5000 characters</span>
-            <Button onClick={handleAnalyze} disabled={analyzing || !text.trim()} size="lg">
+            <Button onClick={handleQuickAnalyze} disabled={analyzing || !text.trim()} size="lg">
               {analyzing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {analyzing ? "Analyzing..." : "Quick Analysis"}
             </Button>

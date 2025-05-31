@@ -571,3 +571,28 @@ def quick_analyze(text: str) -> Dict:
     """
     # Uses the global analyzer instance
     return _global_analyzer.quick_analyze(text)
+
+
+if __name__ == "__main__":
+    import sys
+    import json
+
+    if len(sys.argv) != 3:
+        print("Usage: python analyzer.py <analyze|quick_analyze> <text_to_analyze>", file=sys.stderr)
+        sys.exit(1)
+
+    function_to_call = sys.argv[1]
+    text_input = sys.argv[2]
+
+    result = None
+    if function_to_call == "analyze":
+        # The existing global 'analyze' function can take more arguments,
+        # but for CLI, we'll use defaults for include_patterns, headline, etc.
+        result = analyze(text_input)
+    elif function_to_call == "quick_analyze":
+        result = quick_analyze(text_input)
+    else:
+        print(f"Unknown function: {function_to_call}. Choose 'analyze' or 'quick_analyze'.", file=sys.stderr)
+        sys.exit(1)
+
+    print(json.dumps(result))
