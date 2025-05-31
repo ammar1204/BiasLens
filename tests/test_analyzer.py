@@ -74,7 +74,8 @@ class TestBiasLensAnalyzer(unittest.TestCase):
         # Configure mocks to return basic valid structures
         mock_analyze_sentiment_safe.return_value = {'label': 'neutral', 'confidence': 0.9, 'all_scores': {}, 'bias_indicator': False}
         mock_analyze_emotion_safe.return_value = {'label': 'neutral', 'confidence': 0.8, 'manipulation_risk': 'minimal', 'is_emotionally_charged': False}
-        mock_analyze_bias_safe.return_value = {'flag': False, 'label': 'Likely Neutral', 'type_analysis': {'type': 'neutral', 'confidence': 90}}
+        # For a general valid text, assume no bias flag, leading to primary_bias_type being None
+        mock_analyze_bias_safe.return_value = {'flag': False, 'label': 'Likely Neutral', 'type_analysis': {'type': 'neutral', 'confidence': 90.0}}
         mock_analyze_patterns_safe.return_value = {'nigerian_patterns': {}, 'fake_news': {'detected': False}, 'viral_manipulation': {}}
         # Mock the trust score calculation to return a predictable structure
         mock_calculate_trust_score_safe.return_value = {
@@ -96,12 +97,63 @@ class TestBiasLensAnalyzer(unittest.TestCase):
         self.assertIn('explanation', analysis)
         self.assertIsInstance(analysis['explanation'], list)
         self.assertIn('tip', analysis)
+        self.assertIn('primary_bias_type', analysis) # Check for the new key
+        self.assertIsNone(analysis['primary_bias_type']) # Expect None when bias_result['flag'] is False
         self.assertIn('metadata', analysis)
         self.assertIn('component_processing_times', analysis['metadata'])
         self.assertIn('overall_processing_time_seconds', analysis['metadata'])
         self.assertIn('text_length', analysis['metadata'])
         self.assertIn('initialized_components', analysis['metadata'])
         self.assertIn('analysis_timestamp', analysis['metadata'])
+
+    @patch('biaslens.analyzer.BiasLensAnalyzer._analyze_sentiment_safe')
+    @patch('biaslens.analyzer.BiasLensAnalyzer._analyze_emotion_safe')
+    @patch('biaslens.analyzer.BiasLensAnalyzer._analyze_bias_safe')
+    @patch('biaslens.analyzer.BiasLensAnalyzer._analyze_patterns_safe')
+    @patch('biaslens.analyzer.BiasLensAnalyzer._calculate_trust_score_safe')
+    @patch('biaslens.analyzer.BiasLensAnalyzer._generate_overall_assessment')
+    def test_analyze_specific_bias_type_detected(self,
+                                                 mock_generate_overall_assessment,
+                                                 mock_calculate_trust_score_safe,
+                                                 mock_analyze_patterns_safe,
+                                                 mock_analyze_bias_safe,
+                                                 mock_analyze_emotion_safe,
+                                                 mock_analyze_sentiment_safe):
+        """Test analyze output when a specific bias type is detected and explained."""
+        # Configure mocks
+        mock_analyze_sentiment_safe.return_value = {'label': 'neutral', 'confidence': 0.9, 'all_scores': {}, 'bias_indicator': False}
+        mock_analyze_emotion_safe.return_value = {'label': 'neutral', 'confidence': 0.8, 'manipulation_risk': 'minimal', 'is_emotionally_charged': False}
+
+        # Mock bias detection to indicate a specific bias
+        mock_bias_type = "political_bias" # Use underscore version as it comes from model/classification
+        mock_analyze_bias_safe.return_value = {
+            'flag': True,
+            'label': 'Potentially Biased - High Confidence',
+            'type_analysis': {'type': mock_bias_type, 'confidence': 95.0, 'all_predictions': []}
+        }
+
+        mock_analyze_patterns_safe.return_value = {'nigerian_patterns': {}, 'fake_news': {'detected': False}, 'viral_manipulation': {}}
+
+        # Mock trust score to include the specific bias explanation from TrustScoreCalculator
+        # This part assumes TrustScoreCalculator correctly formats the bias type in its explanation
+        expected_explanation_fragment = f"Dominant bias type identified: {mock_bias_type.replace('_', ' ').title()}."
+        mock_calculate_trust_score_safe.return_value = {
+            'score': 40,
+            'indicator': '🟡 Caution',
+            'explanation': ['High confidence bias detected in language patterns.', expected_explanation_fragment],
+            'tip': 'Verify this content.',
+            'trust_level': 'high_caution', 'risk_factors': ['high_bias'], 'summary': 'Concerning.', 'pattern_analysis': {}
+        }
+        mock_generate_overall_assessment.return_value = {}
+
+        analysis = analyze("This text has clear political bias.")
+
+        self.assertIsNotNone(analysis)
+        self.assertEqual(analysis.get('primary_bias_type'), mock_bias_type)
+        # The explanation in the final result comes from trust_result.get('explanation')
+        # So we check if the mock_calculate_trust_score_safe's explanation is passed through.
+        self.assertIn(expected_explanation_fragment, analysis.get('explanation', []))
+        self.assertIn('High confidence bias detected in language patterns.', analysis.get('explanation', []))
 
 if __name__ == '__main__':
     unittest.main()

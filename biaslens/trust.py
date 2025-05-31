@@ -87,6 +87,16 @@ class TrustScoreCalculator:
                     score -= 20
                     explanation.append("Potential bias detected in language patterns.")
                     risk_factors.append("moderate_bias")
+
+                # Add specific bias type to explanation
+                bias_type_info = bias_data.get('type_analysis', {})
+                detected_bias_type = bias_type_info.get('type')
+
+                if detected_bias_type and detected_bias_type not in ['neutral', 'no bias', 'analysis_error', None]:
+                    explanation.append(f"Dominant bias type identified: {detected_bias_type.replace('_', ' ').title()}.")
+                elif detected_bias_type == 'neutral' or detected_bias_type == 'no bias':
+                    explanation.append("Bias type analysis indicates neutrality.")
+                # If 'analysis_error' or None, no specific type explanation is added for type
         else:
             # Fallback to legacy scoring
             if bias_score >= 0.8:
