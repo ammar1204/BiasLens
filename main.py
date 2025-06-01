@@ -15,7 +15,7 @@ app = FastAPI(
 # CORS Configuration
 # IMPORTANT: Replace this placeholder with your actual Vercel frontend URL once deployed!
 # Example: VERCEL_FRONTEND_URL = "https://your-project-name.vercel.app"
-VERCEL_FRONTEND_URL = "https://your-vercel-app-url.vercel.app"  # <<< USER MUST REPLACE THIS!
+VERCEL_FRONTEND_URL = "https://bias-lens-n86a.vercel.app"  # <<< USER MUST REPLACE THIS!
 
 origins = [
     VERCEL_FRONTEND_URL,
