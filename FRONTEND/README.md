@@ -1,0 +1,92 @@
+# BiasLens Frontend
+
+BiasLens Frontend is a web application designed to help users analyze content and gain insights, with a focus on identifying potential biases. It provides a user-friendly interface for interacting with AI-powered analysis tools and visualizing results on a personal dashboard.
+
+## Key Features
+
+*   **Authentication:** Secure sign-in and sign-up functionality for user account management.
+*   **Dashboard:** A personalized dashboard to display user-specific data and analysis results, including charts and visualizations.
+*   **Content Analysis:** AI-powered tools to analyze text-based content, providing insights and potentially identifying biases.
+*   **Theme Switching:** Ability to switch between light and dark modes for user preference.
+*   **Rich User Interface:** Modern and interactive UI with components like forms, dialogs, tables, toast notifications, and a command palette.
+*   **Supabase Integration:** Utilizes Supabase for backend services, including database interactions and authentication.
+
+## Technologies Used
+
+*   **Framework:** Next.js (v15)
+*   **Language:** TypeScript
+*   **Styling:** Tailwind CSS (with `tailwindcss-animate`, `clsx`, `tailwind-merge`)
+*   **UI Components:** Shadcn/ui (built on Radix UI primitives), Lucide React (icons)
+*   **Forms:** React Hook Form, Zod (for schema validation)
+*   **State Management:** React Context API, Next-themes
+*   **Backend (BaaS):** Supabase
+*   **AI Integration:** AI SDK (@ai-sdk/openai)
+*   **Charting:** Recharts
+*   **Notifications & UI Elements:** Sonner (toasts), CMDK (command palette), Vaul (drawers), Embla Carousel
+*   **Build/Dev Tools:** ESLint, PostCSS, PNPM
+
+## Setup Instructions
+
+Follow these instructions to get the frontend up and running on your local machine.
+
+### Prerequisites
+
+*   **Node.js:** Make sure you have Node.js installed (v18 or later recommended). You can download it from [nodejs.org](https://nodejs.org/).
+*   **pnpm:** This project uses `pnpm` as the package manager. If you don't have it, install it globally:
+    ```bash
+    npm install -g pnpm
+    ```
+
+### Environment Variables
+
+This project requires certain environment variables to be set for connecting to backend services like Supabase and PostgreSQL.
+
+1.  Create a new file named `.env.local` in the `FRONTEND` directory.
+2.  Populate this file with your specific credentials. The necessary variables are:
+
+    ```
+    POSTGRES_URL=your_postgres_connection_url
+    POSTGRES_USER=your_postgres_user
+    POSTGRES_HOST=your_postgres_host
+    SUPABASE_JWT_SECRET=your_supabase_jwt_secret
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+    POSTGRES_PRISMA_URL=your_postgres_prisma_url
+    POSTGRES_PASSWORD=your_postgres_password
+    POSTGRES_DATABASE=your_postgres_database_name
+    SUPABASE_URL=your_supabase_project_url
+    NEXT_PUBLIC_SUPABASE_URL=your_public_supabase_project_url
+    SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+    POSTGRES_URL_NON_POOLING=your_postgres_non_pooling_url
+    ```
+    *Note: Obtain these values from your Supabase project settings and PostgreSQL database configuration.*
+
+### Installation
+
+Clone the repository (if you haven't already) and navigate into the `FRONTEND` directory. Then, install the dependencies:
+
+```bash
+pnpm install
+```
+
+### Running the Development Server
+
+Once the dependencies are installed and your environment variables are set up, you can start the development server:
+
+```bash
+pnpm dev
+```
+
+This will typically start the application on `http://localhost:3000`.
+
+## Available Scripts
+
+The `package.json` file includes several scripts for managing the application:
+
+*   **`pnpm dev`**: Runs the application in development mode.
+*   **`pnpm build`**: Builds the application for production deployment.
+*   **`pnpm start`**: Starts the production server (after running `pnpm build`).
+*   **`pnpm lint`**: Lints the codebase using ESLint.
+
+---
+
+Happy coding!
