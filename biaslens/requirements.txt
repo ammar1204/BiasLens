@@ -1,7 +1,0 @@
-flask
-transformers
-torch
-torchvision
-torchaudio
-sentencepiece
-protobuf
