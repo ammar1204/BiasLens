@@ -90,42 +90,91 @@ The API expects JSON requests and returns JSON responses.
     *   **Request Body:**
         ```json
         {
-          "text": "Your text to analyze here."
+          "text": "Your text to analyze here.",
+          "headline": "Optional: Headline of the article.",
+          "include_patterns": true,
+          "include_detailed_results": true
         }
         ```
     *   **Description:** Performs a full, in-depth analysis including bias type classification, emotional analysis, detailed pattern matching, and trust score calculation.
-    *   **Example Response (Illustrative):**
+        The request body can also include `headline` (string, optional), `include_patterns` (boolean, defaults to `true` in the core analyzer), and `include_detailed_results` (boolean, defaults to `false` in the core analyzer) to customize the analysis. The `detailed_sub_analyses` field in the response will only be populated if `include_detailed_results` is set to `true`. The `patterns` sub-field within `detailed_sub_analyses` depends on `include_patterns` being `true`.
+    *   **Example Response (Illustrative, with `include_detailed_results=True` and `include_patterns=True`):**
         ```json
         {
-          "trust_score": 45,
-          "indicator": "🟡 Caution",
+          "trust_score": 75,
+          "indicator": "🟢 Generally Trustworthy",
           "explanation": [
-            "Potential bias detected in language patterns.",
-            "Dominant bias type identified: Political Bias.",
-            "Content is emotionally charged.",
-            "Contains Nigerian expressions commonly used in misleading content."
+            "The content appears largely objective with neutral sentiment.",
+            "No significant emotional manipulation tactics identified.",
+            "Bias analysis did not flag strong indications of specific bias types."
           ],
-          "tip": "Verify this content from additional sources before trusting it fully.",
-          "primary_bias_type": "political_bias",
+          "tip": "While generally trustworthy, always consider the source and context. For critical information, seek diverse perspectives.",
+          "primary_bias_type": null,
           "metadata": {
             "component_processing_times": {
-              "sentiment_analysis": 0.012,
-              "emotion_analysis": 0.045,
-              "bias_analysis": 0.078,
-              "pattern_analysis": 0.001,
-              "trust_score_calculation": 0.003,
-              "overall_assessment_generation": 0.0005
+              "sentiment_analysis": 0.0152,
+              "emotion_analysis": 0.0521,
+              "bias_analysis": 0.0803,
+              "pattern_analysis": 0.0025,
+              "trust_score_calculation": 0.0030,
+              "overall_assessment_generation": 0.0006
             },
-            "overall_processing_time_seconds": 0.1398,
-            "text_length": 150,
+            "overall_processing_time_seconds": 0.1537,
+            "text_length": 180,
             "initialized_components": ["sentiment", "emotion", "bias_detection", "bias_classification"],
             "analysis_timestamp": 1678886400.123456
+          },
+          "detailed_sub_analyses": {
+            "sentiment": {
+              "label": "neutral",
+              "confidence": 0.85,
+              "all_scores": {
+                "negative": 0.05,
+                "neutral": 0.85,
+                "positive": 0.10
+              }
+            },
+            "emotion": {
+              "label": "neutral",
+              "confidence": 0.90,
+              "is_emotionally_charged": false,
+              "manipulation_risk": "low"
+            },
+            "bias": {
+              "flag": false,
+              "label": "No significant bias detected.",
+              "type_analysis": {
+                "type": "neutral",
+                "confidence": 0.95
+              },
+              "detected": false
+            },
+            "patterns": {
+              "nigerian_patterns": {
+                "has_triggers": false,
+                "has_clickbait": false,
+                "trigger_details": [],
+                "clickbait_details": []
+              },
+              "fake_news": {
+                "detected": false,
+                "details": {
+                  "risk_level": "low",
+                  "matched_phrases": []
+                }
+              },
+              "viral_manipulation": {
+                "engagement_bait_score": 0.1,
+                "sensationalism_score": 0.05,
+                "is_potentially_viral": false
+              }
+            }
           }
         }
         ```
 
 **Note on API Usage Examples:**
-The example responses above are illustrative. The actual structure and content can be explored via the `/docs` endpoint when the API is running. You can use tools like `curl` or Postman, or Python's `requests` library to interact with these endpoints.
+The example responses above are illustrative. The actual structure and content can vary based on the input text and analysis parameters. The full structure can be explored via the `/docs` endpoint when the API is running. You can use tools like `curl` or Postman, or Python's `requests` library to interact with these endpoints.
 
 For example, using `curl`:
 ```bash

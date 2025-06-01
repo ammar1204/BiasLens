@@ -146,6 +146,66 @@ class TestBiasLensAnalyzer(unittest.TestCase):
     @patch('biaslens.analyzer.BiasLensAnalyzer._analyze_bias_safe')
     @patch('biaslens.analyzer.BiasLensAnalyzer._analyze_patterns_safe')
     @patch('biaslens.analyzer.BiasLensAnalyzer._calculate_trust_score_safe')
+    # We don't need to mock _generate_overall_assessment as its results are part of what we test from analyze directly
+    def test_analyze_detailed_results_structure(self,
+                                               mock_calculate_trust_score_safe,
+                                               mock_analyze_patterns_safe,
+                                               mock_analyze_bias_safe,
+                                               mock_analyze_emotion_safe,
+                                               mock_analyze_sentiment_safe):
+        """Test the structure of analyze output when include_detailed_results=True."""
+        # Configure mocks to return basic valid structures
+        mock_analyze_sentiment_safe.return_value = {'label': 'neutral', 'confidence': 0.9, 'all_scores': {}}
+        mock_analyze_emotion_safe.return_value = {'label': 'neutral', 'confidence': 0.8, 'manipulation_risk': 'minimal'}
+        mock_analyze_bias_safe.return_value = {'flag': False, 'label': 'Neutral', 'type_analysis': {'type': 'neutral'}}
+        # Mock for pattern_result when include_patterns=True
+        mock_analyze_patterns_safe.return_value = {
+            'nigerian_patterns': {'has_triggers': False, 'has_clickbait': False},
+            'fake_news': {'detected': False, 'details': {}},
+            'viral_manipulation': {'score': 0.1}
+        }
+        mock_calculate_trust_score_safe.return_value = {
+            'score': 80, 'indicator': '🟢 Trusted', 'explanation': ['Details.'], 'tip': 'Tip.'
+        }
+
+        # Call analyze with include_detailed_results=True and include_patterns=True
+        analysis = analyze("This is a test for detailed results.", include_detailed_results=True, include_patterns=True)
+
+        self.assertIsNotNone(analysis)
+        self.assertIn('detailed_sub_analyses', analysis)
+        detailed_results = analysis['detailed_sub_analyses']
+        self.assertIsInstance(detailed_results, dict)
+
+        # Check for main sub-analysis keys
+        self.assertIn('sentiment', detailed_results)
+        self.assertIsInstance(detailed_results['sentiment'], dict)
+        self.assertIn('emotion', detailed_results)
+        self.assertIsInstance(detailed_results['emotion'], dict)
+        self.assertIn('bias', detailed_results)
+        self.assertIsInstance(detailed_results['bias'], dict)
+
+        # Check for patterns structure
+        self.assertIn('patterns', detailed_results)
+        self.assertIsInstance(detailed_results['patterns'], dict)
+        patterns_details = detailed_results['patterns']
+        self.assertIn('nigerian_patterns', patterns_details)
+        self.assertIsInstance(patterns_details['nigerian_patterns'], dict)
+        self.assertIn('fake_news', patterns_details)
+        self.assertIsInstance(patterns_details['fake_news'], dict)
+        self.assertIn('viral_manipulation', patterns_details)
+        self.assertIsInstance(patterns_details['viral_manipulation'], dict)
+
+        # Check metadata structure (already partially covered in test_analyze_valid_text_structure)
+        self.assertIn('metadata', analysis)
+        self.assertIsInstance(analysis['metadata'], dict)
+        self.assertIn('component_processing_times', analysis['metadata'])
+        self.assertIn('pattern_analysis', analysis['metadata']['component_processing_times']) # Ensure pattern_analysis time is there
+
+    @patch('biaslens.analyzer.BiasLensAnalyzer._analyze_sentiment_safe')
+    @patch('biaslens.analyzer.BiasLensAnalyzer._analyze_emotion_safe')
+    @patch('biaslens.analyzer.BiasLensAnalyzer._analyze_bias_safe')
+    @patch('biaslens.analyzer.BiasLensAnalyzer._analyze_patterns_safe')
+    @patch('biaslens.analyzer.BiasLensAnalyzer._calculate_trust_score_safe')
     @patch('biaslens.analyzer.BiasLensAnalyzer._generate_overall_assessment')
     def test_analyze_specific_bias_type_detected(self,
                                                  mock_generate_overall_assessment,
