@@ -1,34 +1,20 @@
-"use client"
-
-import { useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Loader2, AlertTriangle, CheckCircle, XCircle, Brain, TrendingUp, MessageSquare } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { useRouter } from "next/navigation"
-import { useEffect } from "react"
+"use client";
 
 // IMPORTANT: For Vercel deployment, ensure NEXT_PUBLIC_API_BASE_URL is set in environment variables
 // to point to your backend API (e.g., your Render service URL).
 // IMPORTANT: Ensure your backend API (e.g., on Render) has CORS configured to allow requests
 // from your Vercel frontend domain.
 
-"use client"
-
-import { useState, useEffect } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Loader2, AlertTriangle, CheckCircle, XCircle, Brain, TrendingUp, MessageSquare, Info, Zap, EyeOff, Newspaper, Lightbulb } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/auth-context";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, AlertTriangle, CheckCircle, XCircle, Brain, TrendingUp, MessageSquare, Info, Zap, EyeOff, Newspaper, Lightbulb } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 
 // --- TypeScript Interfaces for API Responses ---
 
@@ -178,7 +164,7 @@ export default function AnalyzePage() {
       const response = await fetch(`${apiBaseUrl}/quick_analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text.trim() }), // Removed userId
+        body: JSON.stringify({ text: text.trim() }),
       })
 
       const responseData = await response.json();
@@ -218,7 +204,7 @@ export default function AnalyzePage() {
       const response = await fetch(`${apiBaseUrl}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody), // Removed userId, added params
+        body: JSON.stringify(requestBody),
       })
 
       const responseData = await response.json();
