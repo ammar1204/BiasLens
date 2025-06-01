@@ -200,8 +200,8 @@ class BiasLensAnalyzer:
             return {
                 'score': None,
                 'indicator': 'Error',
-                'explanation': ["Empty text provided"],
-                'tip': "For a more comprehensive analysis, use the full analyze function."
+                'explanation': "Empty text provided.",
+                'tip': "No text was provided. Please input text for analysis. For a detailed breakdown of potential biases and manipulation, use the full analyze() function once text is provided."
             }
 
         try:
@@ -221,15 +221,16 @@ class BiasLensAnalyzer:
                 'score': basic_trust_score.get('score'),
                 'indicator': basic_trust_score.get('indicator'),
                 'explanation': basic_trust_score.get('explanation'),
-                'tip': "For a more comprehensive analysis, use the full analyze function."
+                'tip': "This is a basic check. For a deeper analysis of bias types, emotional manipulation, and overall trust score, use the full analyze() function."
             }
 
         except Exception as e:
+            logger.error(f"Quick analysis failed: {str(e)}", exc_info=True) # Added logging
             return {
                 'score': None,
                 'indicator': 'Error',
-                'explanation': [f"An error occurred during quick analysis: {str(e)}"],
-                'tip': "For a more comprehensive analysis, use the full analyze function."
+                'explanation': f"An error occurred during quick analysis: {str(e)}",
+                'tip': "Quick analysis encountered an issue. For a comprehensive analysis including detailed bias types, emotional language, and a full trust assessment, try the full analyze() function."
             }
 
     def analyze_headline_content_mismatch(self, headline: str, content: str) -> Dict:
@@ -458,34 +459,48 @@ class BiasLensAnalyzer:
                                      fake_detected: bool, fake_details: Dict) -> Dict:
         """Calculate basic trust score for quick analysis"""
         score = 80  # Start with neutral trust
-        explanation = []
+        findings = []
 
         # Sentiment penalties
         if sentiment_result.get('bias_indicator', False):
             score -= 15
-            explanation.append("Sentiment indicates potential bias")
+            findings.append("potential sentiment bias")
 
         # Pattern penalties
         if nigerian_patterns.get('has_triggers', False):
             score -= 20
-            explanation.append("Contains suspicious Nigerian expressions")
+            findings.append("suspicious Nigerian expressions")
 
         if nigerian_patterns.get('has_clickbait', False):
             score -= 15
-            explanation.append("Contains clickbait patterns")
+            findings.append("clickbait patterns")
 
         if fake_detected:
             risk_level = fake_details.get('risk_level', 'medium')
             penalty = {'high': 25, 'medium': 15, 'low': 8}.get(risk_level, 10)
             score -= penalty
-            explanation.append(f"Fake news risk detected ({risk_level})")
+            findings.append(f"{risk_level} fake news risk")
 
         score = max(0, min(score, 100))
+
+        explanation_str = "Quick check found: "
+        if findings:
+            if len(findings) == 1:
+                explanation_str += findings[0] + "."
+            elif len(findings) == 2:
+                explanation_str += findings[0] + " and " + findings[1] + "."
+            else: # More than 2
+                explanation_str += ", ".join(findings[:-1]) + ", and " + findings[-1] + "."
+        else:
+            explanation_str = "Quick check found no immediate high-risk patterns."
+            if score < 70 : # If score is still low due to very negative sentiment without specific flags
+                 explanation_str = "Quick check found strongly negative sentiment."
+
 
         return {
             'score': score,
             'indicator': TrustScoreCalculator.get_trust_indicator(score),
-            'explanation': explanation,
+            'explanation': explanation_str,
             'mode': 'basic_calculation'
         }
 
@@ -549,28 +564,49 @@ class BiasLensAnalyzer:
 
         # Determine primary concerns
         primary_concerns = []
+        bias_type_detected = None
 
         if bias_result.get('flag', False):
             bias_type = bias_result.get('type_analysis', {}).get('type', 'unknown')
-            if bias_type and bias_type != 'neutral':
-                primary_concerns.append(f"Contains {bias_type} bias")
+            if bias_type and bias_type.lower() not in ['neutral', 'no bias', 'unknown', 'analysis_error', '']:
+                primary_concerns.append(f"Potential {bias_type.replace('_', ' ').title()} Bias detected.")
+                bias_type_detected = bias_type.replace('_', ' ').title()
+            elif bias_type == 'unknown':
+                primary_concerns.append("Potential Unspecified Bias detected.")
+                bias_type_detected = "Unspecified"
 
-        if emotion_result.get('manipulation_risk', 'minimal') in ['high', 'medium']:
-            primary_concerns.append("Uses emotionally manipulative language")
 
-        if 'clickbait' in str(risk_factors):
-            primary_concerns.append("Contains clickbait patterns")
+        is_emotionally_manipulative = emotion_result.get('manipulation_risk', 'minimal') in ['high', 'medium']
+        if is_emotionally_manipulative:
+            primary_concerns.append("Uses language that may be emotionally manipulative.")
 
-        if 'fake_risk' in str(risk_factors):
-            primary_concerns.append("Shows signs of misinformation")
+        if 'clickbait' in str(risk_factors).lower(): # Ensure case-insensitivity
+            primary_concerns.append("Shows characteristics of clickbait.")
+
+        if 'fake_risk' in str(risk_factors).lower(): # Ensure case-insensitivity
+            primary_concerns.append("Contains elements associated with misinformation.")
+
+        # Consolidate if too many generic concerns, but for now, let's keep them distinct as requested.
 
         # Generate recommendation
         if trust_score >= 70:
-            recommendation = "This content appears generally trustworthy. Exercise normal critical thinking."
+            recommendation = "This content appears generally trustworthy. Always exercise critical thinking by considering the source and looking for supporting evidence on important topics."
         elif trust_score >= 40:
-            recommendation = "This content has some concerning patterns. Verify from additional sources."
+            recommendation = "This content has some concerning patterns. Cross-reference key claims with reputable news outlets or fact-checking websites (e.g., Snopes, PolitiFact, or local equivalents) before accepting them as true. Be mindful of the potential biases or manipulative language identified."
         else:
-            recommendation = "This content shows multiple red flags. Approach with significant caution."
+            recommendation = "This content shows multiple red flags. Be very skeptical of its claims and avoid sharing it until independently verified by trusted sources. Consider the potential intent behind the message and who might benefit from its spread."
+
+        # Generate educational tip based on findings
+        educational_tip = trust_result.get('tip', "Always critically evaluate information before accepting or sharing it.") # Default tip
+
+        if bias_type_detected and bias_type_detected != "Unspecified":
+            educational_tip = f"Learn more about {bias_type_detected} Bias: Understand its common characteristics and how it can influence perception. Look for signs like selective reporting or emotionally loaded framing related to this bias."
+        elif is_emotionally_manipulative:
+            educational_tip = "Recognize emotionally manipulative language: Pay attention to words designed to evoke strong emotional responses (e.g., 'outrageous,' 'shocking,' 'miraculous'). Such language can overshadow factual reporting. Question if the emotion is justified by the evidence."
+        elif 'clickbait' in str(risk_factors).lower():
+            educational_tip = "Identify clickbait: Watch out for sensationalized headlines or teasers that withhold key information to provoke clicks. Compare the headline with the actual content to see if it delivers on its promise."
+        elif 'fake_risk' in str(risk_factors).lower():
+            educational_tip = "Spotting misinformation: Look for unverifiable claims, anonymous sources, or a lack of credible evidence. Check if other reputable sources are reporting the same information."
 
         # Risk level
         if trust_score >= 70:
@@ -583,10 +619,10 @@ class BiasLensAnalyzer:
         return {
             'trust_score': trust_score,
             'risk_level': risk_level,
-            'primary_concerns': primary_concerns,
+            'primary_concerns': list(set(primary_concerns)), # Ensure distinct concerns
             'recommendation': recommendation,
             'summary': trust_result.get('summary', ''),
-            'educational_tip': trust_result.get('tip', '')
+            'educational_tip': educational_tip
         }
 
 
