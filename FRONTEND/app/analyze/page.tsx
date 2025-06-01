@@ -52,7 +52,8 @@ export default function AnalyzePage() {
     setResult(null)
 
     try {
-      const response = await fetch("https://localhost:8000/quick_analyze", {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+      const response = await fetch(`${apiBaseUrl}/quick_analyze`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -99,7 +100,8 @@ export default function AnalyzePage() {
     setResult(null)
 
     try {
-      const response = await fetch("/api/analyze", { // Changed endpoint
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+      const response = await fetch(`${apiBaseUrl}/analyze`, { // Changed endpoint and use env var
         method: "POST",
         headers: {
           "Content-Type": "application/json",
