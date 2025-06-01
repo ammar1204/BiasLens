@@ -85,6 +85,53 @@ export default function AnalyzePage() {
     }
   }
 
+  const handleDeepAnalyze = async () => {
+    if (!text.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter some text to analyze",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setAnalyzing(true)
+    setResult(null)
+
+    try {
+      const response = await fetch("/api/analyze", { // Changed endpoint
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: text.trim(),
+          userId: user?.id,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Deep analysis failed")
+      }
+
+      const analysisResult = await response.json()
+      setResult(analysisResult)
+
+      toast({
+        title: "Deep Analysis Complete",
+        description: "Your text has been deeply analyzed successfully!",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to deeply analyze text. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
   const getTrustScoreColor = (score: number) => {
     if (score >= 70) return "text-green-600"
     if (score >= 40) return "text-yellow-600"
@@ -146,7 +193,7 @@ export default function AnalyzePage() {
               {analyzing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {analyzing ? "Analyzing..." : "Quick Analysis"}
             </Button>
-             <Button onClick={handleAnalyze} disabled={analyzing || !text.trim()} size="lg">
+             <Button onClick={handleDeepAnalyze} disabled={analyzing || !text.trim()} size="lg">
               {analyzing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {analyzing ? "Analyzing..." : "Deep Analysis"}
             </Button>
