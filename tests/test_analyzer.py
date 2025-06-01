@@ -212,87 +212,104 @@ class TestBiasLensAnalyzer(unittest.TestCase):
 
         # --- Test Recommendations based on Trust Score ---
         # High score
+        # High score recommendation
+        high_score_recommendation = "This content appears generally trustworthy. Always exercise critical thinking by considering the source and looking for supporting evidence on important topics."
         mock_calculate_trust_score_safe.return_value = {
-            'score': 80, 'indicator': '🟢 Trusted', 'explanation': ['Seems okay.'],
+            'score': 80, 'indicator': '🟢 Trusted',
+            'explanation': ['Seems okay.', high_score_recommendation], # Recommendation in explanation
             'tip': "Always critically evaluate information before accepting or sharing it.", # Default educational tip
-            'summary': "This content appears generally trustworthy. Always exercise critical thinking by considering the source and looking for supporting evidence on important topics.", # Contains recommendation
-            'risk_factors': [], 'trust_level': 'high'
+            'risk_factors': [], 'trust_level': 'high', 'summary': high_score_recommendation # summary still useful for internal consistency if TrustScoreCalc uses it
         }
         result = analyze("High score text")
-        self.assertIn("This content appears generally trustworthy", result['summary'])
+        # Check if any string in the explanation list contains the recommendation
+        self.assertTrue(any(high_score_recommendation in exp_str for exp_str in result['explanation']))
 
-        # Medium score
+        # Medium score recommendation
+        medium_score_recommendation = "This content has some concerning patterns. Cross-reference key claims with reputable news outlets or fact-checking websites (e.g., Snopes, PolitiFact, or local equivalents) before accepting them as true. Be mindful of the potential biases or manipulative language identified."
         mock_calculate_trust_score_safe.return_value = {
-            'score': 50, 'indicator': '🟡 Caution', 'explanation': ['Some concerns.'],
+            'score': 50, 'indicator': '🟡 Caution',
+            'explanation': ['Some concerns.', medium_score_recommendation],
             'tip': "Always critically evaluate information before accepting or sharing it.",
-            'summary': "This content has some concerning patterns. Cross-reference key claims with reputable news outlets or fact-checking websites (e.g., Snopes, PolitiFact, or local equivalents) before accepting them as true. Be mindful of the potential biases or manipulative language identified.",
-            'risk_factors': ['bias'], 'trust_level': 'medium'
+            'risk_factors': ['bias'], 'trust_level': 'medium', 'summary': medium_score_recommendation
         }
         result = analyze("Medium score text")
-        self.assertIn("Cross-reference key claims", result['summary'])
+        self.assertTrue(any(medium_score_recommendation in exp_str for exp_str in result['explanation']))
 
-        # Low score
+        # Low score recommendation
+        low_score_recommendation = "This content shows multiple red flags. Be very skeptical of its claims and avoid sharing it until independently verified by trusted sources. Consider the potential intent behind the message and who might benefit from its spread."
         mock_calculate_trust_score_safe.return_value = {
-            'score': 20, 'indicator': '🔴 Untrustworthy', 'explanation': ['Many concerns.'],
+            'score': 20, 'indicator': '🔴 Untrustworthy',
+            'explanation': ['Many concerns.', low_score_recommendation],
             'tip': "Always critically evaluate information before accepting or sharing it.",
-            'summary': "This content shows multiple red flags. Be very skeptical of its claims and avoid sharing it until independently verified by trusted sources. Consider the potential intent behind the message and who might benefit from its spread.",
-            'risk_factors': ['bias', 'emotion'], 'trust_level': 'low'
+            'risk_factors': ['bias', 'emotion'], 'trust_level': 'low', 'summary': low_score_recommendation
         }
         result = analyze("Low score text")
-        self.assertIn("Be very skeptical of its claims", result['summary'])
+        self.assertTrue(any(low_score_recommendation in exp_str for exp_str in result['explanation']))
 
         # --- Test Educational Tips ---
         # Tip for specific bias type (Political Bias)
         # We need to ensure the mock_calculate_trust_score_safe reflects a state where bias was the primary reason for the tip
         mock_analyze_bias_safe.return_value = {'flag': True, 'type_analysis': {'type': 'political_bias'}}
+        political_bias_tip = "Learn more about Political Bias: Understand its common characteristics and how it can influence perception. Look for signs like selective reporting or emotionally loaded framing related to this bias."
         mock_calculate_trust_score_safe.return_value = {
-            'score': 50, 'indicator': '🟡 Caution', 'explanation': ['Bias found.'],
-            'tip': "Learn more about Political Bias: Understand its common characteristics and how it can influence perception. Look for signs like selective reporting or emotionally loaded framing related to this bias.",
-            'summary': "Concern: Potential Political Bias detected.", 'risk_factors': ['bias_political_bias'], 'trust_level': 'medium'
+            'score': 50, 'indicator': '🟡 Caution',
+            'explanation': ['Bias found.', 'Concern: Potential Political Bias detected.'],
+            'tip': political_bias_tip,
+            'risk_factors': ['bias_political_bias'], 'trust_level': 'medium'
         }
         result = analyze("Text with political bias")
-        self.assertIn("Learn more about Political Bias", result['tip'])
+        self.assertEqual(political_bias_tip, result['tip'])
+        self.assertTrue(any("Potential Political Bias detected" in exp_str for exp_str in result['explanation']))
         mock_analyze_bias_safe.return_value = {'flag': False, 'type_analysis': {'type': 'neutral'}} # Reset
 
         # Tip for emotional manipulation
+        emotional_manipulation_tip = "Recognize emotionally manipulative language: Pay attention to words designed to evoke strong emotional responses (e.g., 'outrageous,' 'shocking,' 'miraculous'). Such language can overshadow factual reporting. Question if the emotion is justified by the evidence."
         mock_analyze_emotion_safe.return_value = {'label': 'anger', 'confidence': 0.9, 'manipulation_risk': 'high', 'is_emotionally_charged': True}
         mock_calculate_trust_score_safe.return_value = {
-            'score': 45, 'indicator': '🟡 Caution', 'explanation': ['Emotionally charged.'],
-            'tip': "Recognize emotionally manipulative language: Pay attention to words designed to evoke strong emotional responses (e.g., 'outrageous,' 'shocking,' 'miraculous'). Such language can overshadow factual reporting. Question if the emotion is justified by the evidence.",
-            'summary': "Concern: Uses language that may be emotionally manipulative.", 'risk_factors': ['emotion_high_risk'], 'trust_level': 'medium'
+            'score': 45, 'indicator': '🟡 Caution',
+            'explanation': ['Emotionally charged.', 'Concern: Uses language that may be emotionally manipulative.'],
+            'tip': emotional_manipulation_tip,
+            'risk_factors': ['emotion_high_risk'], 'trust_level': 'medium'
         }
         result = analyze("Text with emotional manipulation")
-        self.assertIn("Recognize emotionally manipulative language", result['tip'])
+        self.assertEqual(emotional_manipulation_tip, result['tip'])
+        self.assertTrue(any("Uses language that may be emotionally manipulative" in exp_str for exp_str in result['explanation']))
         mock_analyze_emotion_safe.return_value = {'label': 'neutral', 'confidence': 0.8, 'manipulation_risk': 'minimal', 'is_emotionally_charged': False} # Reset
 
         # Tip for clickbait (simulated by risk_factors in trust_result)
-        # _generate_overall_assessment checks for 'clickbait' in risk_factors string
+        clickbait_tip = "Identify clickbait: Watch out for sensationalized headlines or teasers that withhold key information to provoke clicks. Compare the headline with the actual content to see if it delivers on its promise."
         mock_calculate_trust_score_safe.return_value = {
-            'score': 55, 'indicator': '🟡 Caution', 'explanation': ['Clickbaity.'],
-            'tip': "Identify clickbait: Watch out for sensationalized headlines or teasers that withhold key information to provoke clicks. Compare the headline with the actual content to see if it delivers on its promise.",
-            'summary': "Concern: Shows characteristics of clickbait.", 'risk_factors': ['clickbait_detected_pattern'], 'trust_level': 'medium'
+            'score': 55, 'indicator': '🟡 Caution',
+            'explanation': ['Clickbaity.', 'Concern: Shows characteristics of clickbait.'],
+            'tip': clickbait_tip,
+            'risk_factors': ['clickbait_detected_pattern'], 'trust_level': 'medium'
         }
         result = analyze("Text with clickbait patterns")
-        self.assertIn("Identify clickbait", result['tip'])
+        self.assertEqual(clickbait_tip, result['tip'])
+        self.assertTrue(any("Shows characteristics of clickbait" in exp_str for exp_str in result['explanation']))
 
         # Tip for misinformation (simulated by risk_factors in trust_result)
-        # _generate_overall_assessment checks for 'fake_risk' in risk_factors string
+        misinformation_tip = "Spotting misinformation: Look for unverifiable claims, anonymous sources, or a lack of credible evidence. Check if other reputable sources are reporting the same information."
         mock_calculate_trust_score_safe.return_value = {
-            'score': 30, 'indicator': '🔴 Untrustworthy', 'explanation': ['Misinformation signs.'],
-            'tip': "Spotting misinformation: Look for unverifiable claims, anonymous sources, or a lack of credible evidence. Check if other reputable sources are reporting the same information.",
-            'summary': "Concern: Contains elements associated with misinformation.", 'risk_factors': ['fake_risk_high'], 'trust_level': 'low'
+            'score': 30, 'indicator': '🔴 Untrustworthy',
+            'explanation': ['Misinformation signs.', 'Concern: Contains elements associated with misinformation.'],
+            'tip': misinformation_tip,
+            'risk_factors': ['fake_risk_high'], 'trust_level': 'low'
         }
         result = analyze("Text with misinformation signs")
-        self.assertIn("Spotting misinformation", result['tip'])
+        self.assertEqual(misinformation_tip, result['tip'])
+        self.assertTrue(any("Contains elements associated with misinformation" in exp_str for exp_str in result['explanation']))
 
-        # Default educational tip (no specific major concern triggering a specialized tip)
+        # Default educational tip
+        default_tip = "Always critically evaluate information before accepting or sharing it."
         mock_calculate_trust_score_safe.return_value = {
-            'score': 75, 'indicator': '🟢 Trusted', 'explanation': ['Generally okay.'],
-            'tip': "Always critically evaluate information before accepting or sharing it.", # Default
-            'summary': "This content appears generally trustworthy.", 'risk_factors': [], 'trust_level': 'high'
+            'score': 75, 'indicator': '🟢 Trusted',
+            'explanation': ['Generally okay.', 'This content appears generally trustworthy.'],
+            'tip': default_tip,
+            'risk_factors': [], 'trust_level': 'high'
         }
         result = analyze("Generally okay text")
-        self.assertEqual("Always critically evaluate information before accepting or sharing it.", result['tip'])
+        self.assertEqual(default_tip, result['tip'])
 
 
     @patch('biaslens.analyzer.BiasLensAnalyzer._analyze_sentiment_safe')
@@ -311,57 +328,64 @@ class TestBiasLensAnalyzer(unittest.TestCase):
         mock_analyze_sentiment_safe.return_value = {'label': 'neutral', 'confidence': 0.9}
 
         # Concern: Bias Type
+        concern_bias = "Potential Confirmation Bias detected."
         mock_analyze_bias_safe.return_value = {'flag': True, 'type_analysis': {'type': 'confirmation_bias'}}
         mock_analyze_emotion_safe.return_value = {'manipulation_risk': 'minimal'}
         mock_calculate_trust_score_safe.return_value = {
-            'score': 50, 'indicator': '🟡 Caution', 'explanation': ['Bias.'], 'tip': 'Tip.',
-            'summary': "Primary Concern: Potential Confirmation Bias detected. Recommendation: Verify.",
+            'score': 50, 'indicator': '🟡 Caution',
+            'explanation': ['Bias.', concern_bias, "Recommendation: Verify."], 'tip': 'Tip.',
             'risk_factors': ['bias_confirmation_bias'], 'trust_level': 'medium'
         }
         result = analyze("Text with confirmation bias")
-        self.assertIn("Potential Confirmation Bias detected", result['summary'])
+        self.assertTrue(any(concern_bias in exp_str for exp_str in result['explanation']))
         mock_analyze_bias_safe.return_value = {'flag': False, 'type_analysis': {'type': 'neutral'}} # Reset
 
         # Concern: Emotional Manipulation
+        concern_emotion = "Uses language that may be emotionally manipulative."
         mock_analyze_emotion_safe.return_value = {'manipulation_risk': 'high', 'is_emotionally_charged': True}
         mock_calculate_trust_score_safe.return_value = {
-            'score': 45, 'indicator': '🟡 Caution', 'explanation': ['Emotion.'], 'tip': 'Tip.',
-            'summary': "Primary Concern: Uses language that may be emotionally manipulative. Recommendation: Be wary.",
+            'score': 45, 'indicator': '🟡 Caution',
+            'explanation': ['Emotion.', concern_emotion, "Recommendation: Be wary."], 'tip': 'Tip.',
             'risk_factors': ['emotion_high_risk'], 'trust_level': 'medium'
         }
         result = analyze("Text with high emotional manipulation")
-        self.assertIn("Uses language that may be emotionally manipulative", result['summary'])
+        self.assertTrue(any(concern_emotion in exp_str for exp_str in result['explanation']))
         mock_analyze_emotion_safe.return_value = {'manipulation_risk': 'minimal', 'is_emotionally_charged': False} # Reset
 
         # Concern: Clickbait (via risk_factors)
+        concern_clickbait = "Shows characteristics of clickbait."
         mock_calculate_trust_score_safe.return_value = {
-            'score': 55, 'indicator': '🟡 Caution', 'explanation': ['Clickbait.'], 'tip': 'Tip.',
-            'summary': "Primary Concern: Shows characteristics of clickbait. Recommendation: Check content.",
+            'score': 55, 'indicator': '🟡 Caution',
+            'explanation': ['Clickbait.', concern_clickbait, "Recommendation: Check content."], 'tip': 'Tip.',
             'risk_factors': ['has_clickbait_pattern'], 'trust_level': 'medium'
         }
         result = analyze("Text with clickbait")
-        self.assertIn("Shows characteristics of clickbait", result['summary'])
+        self.assertTrue(any(concern_clickbait in exp_str for exp_str in result['explanation']))
 
         # Concern: Misinformation/Fake News (via risk_factors)
+        concern_misinfo = "Contains elements associated with misinformation."
         mock_calculate_trust_score_safe.return_value = {
-            'score': 30, 'indicator': '🔴 Untrustworthy', 'explanation': ['Fake.'], 'tip': 'Tip.',
-            'summary': "Primary Concern: Contains elements associated with misinformation. Recommendation: Do not trust.",
+            'score': 30, 'indicator': '🔴 Untrustworthy',
+            'explanation': ['Fake.', concern_misinfo, "Recommendation: Do not trust."], 'tip': 'Tip.',
             'risk_factors': ['fake_news_risk_high'], 'trust_level': 'low'
         }
         result = analyze("Text with fake news indicators")
-        self.assertIn("Contains elements associated with misinformation", result['summary'])
+        self.assertTrue(any(concern_misinfo in exp_str for exp_str in result['explanation']))
 
         # Multiple Concerns
+        concern_sensationalism = "Potential Sensationalism Bias detected."
+        concern_multi_emotion = "Uses language that may be emotionally manipulative."
         mock_analyze_bias_safe.return_value = {'flag': True, 'type_analysis': {'type': 'sensationalism_bias'}}
         mock_analyze_emotion_safe.return_value = {'manipulation_risk': 'medium', 'is_emotionally_charged': True}
         mock_calculate_trust_score_safe.return_value = {
-            'score': 35, 'indicator': '🔴 Untrustworthy', 'explanation': ['Multiple issues.'], 'tip': 'Tip.',
-            'summary': "Primary Concerns: Potential Sensationalism Bias detected. Uses language that may be emotionally manipulative. Recommendation: Extreme caution.",
+            'score': 35, 'indicator': '🔴 Untrustworthy',
+            'explanation': ['Multiple issues.', concern_sensationalism, concern_multi_emotion, "Recommendation: Extreme caution."],
+            'tip': 'Tip.',
             'risk_factors': ['bias_sensationalism', 'emotion_medium_risk'], 'trust_level': 'low'
         }
         result = analyze("Text with multiple issues")
-        self.assertIn("Potential Sensationalism Bias detected", result['summary'])
-        self.assertIn("Uses language that may be emotionally manipulative", result['summary'])
+        self.assertTrue(any(concern_sensationalism in exp_str for exp_str in result['explanation']))
+        self.assertTrue(any(concern_multi_emotion in exp_str for exp_str in result['explanation']))
 
 
 if __name__ == '__main__':
