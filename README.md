@@ -2,7 +2,6 @@
 
 ## Description
 BiasLens is a project featuring a Python library and a FastAPI backend designed to detect and analyze various types of bias, emotional tone, and other characteristics in text. It provides both quick and comprehensive analysis options. This project was initially developed for a hackathon and has been expanded to include an API and a frontend interface.
-Live link: https://biaslens-five.vercel.app/
 
 ## Features
 - Analyzes text for potential bias using pre-trained Hugging Face models.
