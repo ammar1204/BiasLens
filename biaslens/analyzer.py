@@ -6,6 +6,7 @@ from .trust import TrustScoreCalculator
 import time
 from typing import Dict, Optional
 import logging
+import random # Added for random tip selection
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +85,8 @@ class BiasLensAnalyzer:
                 'trust_score': None,
                 'indicator': 'Error',
                 'explanation': ["Empty or invalid text provided"],
-                'tip': 'Analysis failed',
-                'primary_bias_type': None,  # ADDED: Missing field
+                'tip': "Analysis failed: No text was provided. Please input text for analysis.", # MODIFIED
+                'primary_bias_type': None,
                 'metadata': {
                     'component_processing_times': {},
                     'overall_processing_time_seconds': 0
@@ -202,9 +203,9 @@ class BiasLensAnalyzer:
             return {
                 'trust_score': None,
                 'indicator': 'Error',
-                'explanation': [f"An error occurred: {str(e)}"],
-                'tip': 'Analysis failed',
-                'primary_bias_type': None,  # ADDED: Missing field
+                'explanation': [f"An error occurred during analysis: {str(e)}"],
+                'tip': "Analysis failed due to an unexpected error. Please try again later or contact support.", # MODIFIED
+                'primary_bias_type': None,
                 'metadata': {
                     'component_processing_times': component_processing_times,
                     'overall_processing_time_seconds': overall_processing_time,
@@ -258,7 +259,7 @@ class BiasLensAnalyzer:
                 'score': basic_trust_score_results.get('score'),
                 'indicator': basic_trust_score_results.get('indicator'),
                 'explanation': updated_explanation,
-                'tip': "This is a basic check. For a deeper analysis of bias types, emotional manipulation, and overall trust score, use the full analyze() function."
+                'tip': random.choice(TrustScoreCalculator.DID_YOU_KNOW_TIPS) # MODIFIED
             }
             
             # Add fields from lightweight_bias_info
