@@ -23,6 +23,10 @@ interface QuickAnalysisResult {
   indicator: string | null;
   explanation: string | null; // In quick_analyze, explanation is a string
   tip: string | null;
+  inferred_bias_type?: string | null;
+  bias_category?: string | null;
+  bias_target?: string | null;
+  matched_keywords?: string[] | null;
   // Quick analysis might have other specific fields, adjust as necessary
 }
 
@@ -388,8 +392,56 @@ export default function AnalyzePage() {
                   <Badge variant="secondary" className="capitalize">{(result as DeepAnalysisResult).primary_bias_type}</Badge>
                 </div>
               )}
+              {/* Removed the old integrated display for Quick Analysis inferred bias from here */}
             </CardContent>
           </Card>
+
+          {/* New Card for Pattern-Based Bias Assessment (Quick Analysis only) */}
+          {analysisMode === 'quick' &&
+            (result as QuickAnalysisResult).inferred_bias_type &&
+            (result as QuickAnalysisResult).inferred_bias_type !== "No specific patterns detected" &&
+            (result as QuickAnalysisResult).inferred_bias_type !== "Nigerian context detected, specific bias type unclear from patterns" && // Also check for this neutral message
+            (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Newspaper className="h-5 w-5 text-blue-600" /> {/* Changed icon color for distinction */}
+                    Pattern-Based Bias Assessment
+                  </CardTitle>
+                  <CardDescription>
+                    Lightweight analysis based on keyword patterns found in the text.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <h4 className="font-semibold text-sm">Inferred Bias Type:</h4>
+                    <p className="text-sm">{(result as QuickAnalysisResult).inferred_bias_type}</p>
+                  </div>
+                  {(result as QuickAnalysisResult).bias_category && (
+                    <div>
+                      <h4 className="font-semibold text-sm">Category:</h4>
+                      <Badge variant="outline" className="text-sm">{(result as QuickAnalysisResult).bias_category}</Badge>
+                    </div>
+                  )}
+                  {(result as QuickAnalysisResult).bias_target && (
+                    <div>
+                      <h4 className="font-semibold text-sm">Target:</h4>
+                      <Badge variant="outline" className="text-sm">{(result as QuickAnalysisResult).bias_target}</Badge>
+                    </div>
+                  )}
+                  {(result as QuickAnalysisResult).matched_keywords && (result as QuickAnalysisResult).matched_keywords!.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-sm">Matched Keywords:</h4>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {(result as QuickAnalysisResult).matched_keywords!.map(keyword => (
+                          <Badge key={keyword} variant="secondary" className="text-xs">{keyword}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
           {/* Deep Analysis Specific Details */}
           {analysisMode === 'deep' && (result as DeepAnalysisResult).detailed_sub_analyses && (

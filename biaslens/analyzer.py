@@ -1,6 +1,6 @@
 from .sentiment import SentimentAnalyzer
 from .emotion import EmotionClassifier
-from .bias import BiasDetector, BiasTypeClassifier
+from .bias import BiasDetector, BiasTypeClassifier, NigerianBiasEnhancer # Added NigerianBiasEnhancer
 from .patterns import NigerianPatterns, FakeNewsDetector, ViralityDetector
 from .trust import TrustScoreCalculator
 import time
@@ -22,6 +22,7 @@ class BiasLensAnalyzer:
         self._emotion_classifier = None
         self._bias_detector = None
         self._bias_type_classifier = None
+        self._nigerian_bias_enhancer = NigerianBiasEnhancer() # Added instance
 
         # Track initialization status for performance monitoring
         self._initialized_components = set()
@@ -112,6 +113,14 @@ class BiasLensAnalyzer:
             step_start_time = time.time()
             pattern_result = self._analyze_patterns_safe(text) if include_patterns else {}
             component_processing_times['pattern_analysis'] = round(time.time() - step_start_time, 4)
+            
+            # Lightweight Nigerian Bias Assessment (always run for comprehensive analysis if patterns are included)
+            lightweight_nigerian_bias_info = {}
+            if include_patterns: # Assuming this is the right flag to also get the lightweight assessment
+                step_start_time = time.time()
+                lightweight_nigerian_bias_info = self._nigerian_bias_enhancer.get_lightweight_bias_assessment(text)
+                component_processing_times['lightweight_nigerian_bias_assessment'] = round(time.time() - step_start_time, 4)
+
 
             # Calculate Trust Score
             step_start_time = time.time()
@@ -143,6 +152,11 @@ class BiasLensAnalyzer:
                     elif detected_type in ['neutral', 'no bias']:
                         primary_bias_type_value = "neutral"
                     # If 'analysis_error' or empty string, remains None
+            
+            # If ML based primary_bias_type_value is None, check lightweight assessment
+            if primary_bias_type_value is None and lightweight_nigerian_bias_info.get("inferred_bias_type") and lightweight_nigerian_bias_info["inferred_bias_type"] != "No specific patterns detected":
+                primary_bias_type_value = lightweight_nigerian_bias_info["inferred_bias_type"]
+
 
             final_result = {
                 'trust_score': trust_result.get('score'),
@@ -158,6 +172,11 @@ class BiasLensAnalyzer:
                     'analysis_timestamp': time.time()
                 }
             }
+            
+            # Add lightweight Nigerian bias info to the main result if available
+            if lightweight_nigerian_bias_info:
+                final_result['lightweight_nigerian_bias_assessment'] = lightweight_nigerian_bias_info
+
 
             # FIXED: Simplified pattern result handling
             if include_detailed_results:
@@ -169,6 +188,9 @@ class BiasLensAnalyzer:
                 if include_patterns:
                     # Always include patterns section if requested, even if empty due to errors
                     final_result['detailed_sub_analyses']['patterns'] = pattern_result
+                    # Also include lightweight assessment in detailed if patterns are included
+                    final_result['detailed_sub_analyses']['lightweight_nigerian_bias'] = lightweight_nigerian_bias_info
+
 
             return final_result
 
@@ -192,7 +214,7 @@ class BiasLensAnalyzer:
 
     def quick_analyze(self, text: str) -> Dict:
         """
-        Lightweight analysis for quick checks (sentiment + basic patterns only).
+        Lightweight analysis for quick checks (sentiment + basic patterns + lightweight bias).
         Useful for real-time analysis or high-volume processing.
         """
 
@@ -201,7 +223,11 @@ class BiasLensAnalyzer:
                 'score': None,
                 'indicator': 'Error',
                 'explanation': "Empty text provided.",
-                'tip': "No text was provided. Please input text for analysis. For a detailed breakdown of potential biases and manipulation, use the full analyze() function once text is provided."
+                'tip': "No text was provided. Please input text for analysis. For a detailed breakdown of potential biases and manipulation, use the full analyze() function once text is provided.",
+                'inferred_bias_type': None,
+                'bias_category': None,
+                'bias_target': None,
+                'matched_keywords': []
             }
 
         try:
@@ -209,28 +235,48 @@ class BiasLensAnalyzer:
             sentiment_result = self._analyze_sentiment_safe(text)
 
             # Basic pattern analysis (no ML models)
-            nigerian_patterns = NigerianPatterns.analyze_patterns(text)
-            fake_detected, fake_details = FakeNewsDetector.detect(text)
+            nigerian_patterns = NigerianPatterns.analyze_patterns(text) # This is existing
+            fake_detected, fake_details = FakeNewsDetector.detect(text) # This is existing
+
+            # New Lightweight Nigerian Bias Assessment
+            lightweight_bias_info = self._nigerian_bias_enhancer.get_lightweight_bias_assessment(text)
 
             # Simple trust score based on available data
-            basic_trust_score = self._calculate_basic_trust_score(
+            basic_trust_score_results = self._calculate_basic_trust_score(
                 sentiment_result, nigerian_patterns, fake_detected, fake_details
             )
 
-            return {
-                'score': basic_trust_score.get('score'),
-                'indicator': basic_trust_score.get('indicator'),
-                'explanation': basic_trust_score.get('explanation'),
+            # Update explanation with lightweight bias info
+            updated_explanation = basic_trust_score_results.get('explanation', "Quick check results.")
+            if lightweight_bias_info.get("inferred_bias_type") and lightweight_bias_info["inferred_bias_type"] != "No specific patterns detected":
+                if not updated_explanation.endswith("."):
+                    updated_explanation += "."
+                updated_explanation += f" Specific patterns suggest: {lightweight_bias_info['inferred_bias_type']}."
+            
+            # Construct the results dictionary
+            results = {
+                'score': basic_trust_score_results.get('score'),
+                'indicator': basic_trust_score_results.get('indicator'),
+                'explanation': updated_explanation,
                 'tip': "This is a basic check. For a deeper analysis of bias types, emotional manipulation, and overall trust score, use the full analyze() function."
             }
+            
+            # Add fields from lightweight_bias_info
+            results.update(lightweight_bias_info) # This will add all keys from lightweight_bias_info
+
+            return results
 
         except Exception as e:
-            logger.error(f"Quick analysis failed: {str(e)}", exc_info=True) # Added logging
+            logger.error(f"Quick analysis failed: {str(e)}", exc_info=True)
             return {
                 'score': None,
                 'indicator': 'Error',
                 'explanation': f"An error occurred during quick analysis: {str(e)}",
-                'tip': "Quick analysis encountered an issue. For a comprehensive analysis including detailed bias types, emotional language, and a full trust assessment, try the full analyze() function."
+                'tip': "Quick analysis encountered an issue. For a comprehensive analysis including detailed bias types, emotional language, and a full trust assessment, try the full analyze() function.",
+                'inferred_bias_type': None,
+                'bias_category': None,
+                'bias_target': None,
+                'matched_keywords': []
             }
 
     def analyze_headline_content_mismatch(self, headline: str, content: str) -> Dict:
@@ -462,9 +508,13 @@ class BiasLensAnalyzer:
         findings = []
 
         # Sentiment penalties
-        if sentiment_result.get('bias_indicator', False):
+        if sentiment_result.get('bias_indicator', False): # Assuming bias_indicator from sentiment_analyzer
             score -= 15
             findings.append("potential sentiment bias")
+        elif sentiment_result.get('label') == 'negative' and sentiment_result.get('confidence', 0) > 0.7: # Strong negative
+            score -=10
+            findings.append("strong negative sentiment")
+
 
         # Pattern penalties
         if nigerian_patterns.get('has_triggers', False):
@@ -494,7 +544,7 @@ class BiasLensAnalyzer:
         else:
             explanation_str = "Quick check found no immediate high-risk patterns."
             if score < 70 : # If score is still low due to very negative sentiment without specific flags
-                 explanation_str = "Quick check found strongly negative sentiment."
+                 explanation_str = "Quick check found strongly negative sentiment that lowered the score."
 
 
         return {
