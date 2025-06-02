@@ -4,18 +4,26 @@ from .patterns import NigerianPatterns, FakeNewsDetector, ViralityDetector
 
 class TrustScoreCalculator:
     DID_YOU_KNOW_TIPS = [
-        "Fake news often uses words like 'BREAKING' or 'SHOCKING' to create urgency.",
-        "Subtle bias can be hidden in adjectives and tone, not just facts.",
-        "Emotional posts get more shares—even if they're false.",
-        "Sensational headlines are more likely to spread misinformation.",
-        "Repetition of a lie can make people believe it—even without proof.",
-        "Manipulative language often appeals to fear, anger, or patriotism.",
-        "Nigerian Pidgin phrases like 'aswear' or 'nawa o' are often used to make false news seem relatable.",
-        "Articles without specific sources or dates are usually less reliable.",
-        "Content that asks you to 'share before it's deleted' is often manipulative.",
-        "Real news rarely needs excessive exclamation marks or ALL CAPS.",
-        "If something sounds too shocking to be true, verify it from multiple sources.",
-        "Biased content often presents only one side of a complex issue."
+        "Verify information before sharing. Check multiple reputable sources to confirm a story's accuracy.",
+        "Be wary of headlines designed to provoke strong emotions. They might prioritize clicks over facts.",
+        "Look for bylines and author credentials. Anonymous sources can be a red flag for misinformation.",
+        "Check the publication date. Old news can be re-shared out of context to mislead.",
+        "Examine the 'About Us' page of a source to understand its mission, ownership, and potential biases.",
+        "Distinguish between news reporting, opinion pieces, and sponsored content. Each has a different purpose.",
+        "Cross-reference claims with fact-checking websites like Snopes, PolitiFact, or Africa Check.",
+        "Be skeptical of content that claims to have 'secret' or 'exclusive' information without evidence.",
+        "Consider the images and videos used. Are they original, or are they altered or taken from unrelated events?",
+        "Understand that all sources can have some level of bias. Seek diverse perspectives to get a fuller picture.",
+        "Pay attention to the language used. Loaded words, stereotypes, and generalizations can indicate bias.",
+        "If a story sounds too good or too outrageous to be true, it often is. Investigate further.",
+        "Support responsible journalism. Reliable news gathering requires resources and ethical standards.",
+        "Media literacy is a key skill in the digital age. Continuously question and evaluate the information you consume.",
+        "Look for corrections and clarifications. Reputable news organizations admit and fix their mistakes.",
+        "Beware of echo chambers and filter bubbles. Actively seek out viewpoints that challenge your own.",
+        "Check if statistical claims are backed by clear data sources and methodologies.",
+        "Recognize that headlines don't always tell the full story. Read the article thoroughly.",
+        "Be cautious with user-generated content (comments, social media posts) as it's often unverified.",
+        "Understand the difference between correlation and causation when interpreting data or events."
     ]
 
     TRUST_THRESHOLDS = {
@@ -220,8 +228,9 @@ class TrustScoreCalculator:
         # === FINAL ADJUSTMENTS ===
         # Bonus for neutral, well-balanced content
         if (len(risk_factors) == 0 and
-                sentiment_label == 'neutral' and
-                emotion_score < 0.3):
+                sentiment_label == 'neutral' and # This uses legacy sentiment_label
+                (not emotion_data or emotion_data.get('manipulation_risk', 'minimal') == 'minimal' and not emotion_data.get('is_emotionally_charged', False)) and # Check new emotion_data if available
+                (not bias_data or not bias_data.get('flag', False))): # Check new bias_data if available
             score += 5
             explanation.append("Content appears balanced and factual.")
 
@@ -253,20 +262,42 @@ class TrustScoreCalculator:
     def _get_contextual_tip(risk_factors):
         """Get tip based on detected risk factors"""
         contextual_tips = {
-            'high_bias': "Always check if an article presents multiple perspectives on controversial topics.",
-            'emotional_manipulation': "Be extra cautious of content that makes you feel strong emotions like anger or fear.",
-            'nigerian_triggers': "Local expressions can be used to make fake news seem more authentic and relatable.",
-            'clickbait': "Headlines designed to get clicks often don't match the actual content of the article.",
-            'viral_manipulation': "Content asking you to share urgently is often trying to spread misinformation quickly.",
-            'fake_risk': "Look for specific dates, sources, and verifiable facts in news articles."
+            'high_bias': "Examine if the content fairly represents different viewpoints or oversimplifies complex issues. Look for balanced reporting.",
+            'emotional_manipulation': "Identify emotionally charged words. Question if the emotion is justified by evidence or used to cloud judgment.",
+            'nigerian_triggers': "Local expressions can be used to make fake news seem more authentic and relatable.", # Kept as is
+            'clickbait': "Clickbait headlines often exaggerate or omit crucial details. Compare headlines with article content critically.",
+            'viral_manipulation': "Be skeptical of posts urging immediate sharing. Verify content before amplifying it, especially if it seems designed to go viral.",
+            'fake_risk': "Verify information using the 'SIFT' method: Stop, Investigate the source, Find better coverage, Trace claims to the original context."
         }
 
         # Return tip based on highest priority risk factor
-        for risk in ['high_bias', 'emotional_manipulation', 'viral_manipulation', 'fake_risk', 'nigerian_triggers',
-                     'clickbait']:
-            if any(rf.startswith(risk.split('_')[0]) for rf in risk_factors):
-                return contextual_tips.get(risk, random.choice(TrustScoreCalculator.DID_YOU_KNOW_TIPS))
+        # Order of check matters for priority
+        priority_risks = [
+            'high_fake_risk', 'medium_fake_risk', 'low_fake_risk', # Group fake_risk checks
+            'high_bias', 'moderate_bias', 'strong_bias', # Group bias checks
+            'emotional_manipulation', 'extreme_emotion', 'strong_emotion', # Group emotion checks
+            'viral_manipulation', 'mild_viral_manipulation',
+            'nigerian_triggers',
+            'clickbait'
+        ]
+        
+        for risk_key_prefix in priority_risks:
+            # Map specific risk_factors (like 'high_fake_risk') to general contextual_tips keys (like 'fake_risk')
+            mapped_tip_key = None
+            if 'fake_risk' in risk_key_prefix: mapped_tip_key = 'fake_risk'
+            elif 'bias' in risk_key_prefix: mapped_tip_key = 'high_bias' # Use the general 'high_bias' tip for all bias levels
+            elif 'emotion' in risk_key_prefix: mapped_tip_key = 'emotional_manipulation' # Use general for all emotion levels
+            elif 'viral' in risk_key_prefix: mapped_tip_key = 'viral_manipulation'
+            elif 'nigerian' in risk_key_prefix: mapped_tip_key = 'nigerian_triggers'
+            elif 'clickbait' in risk_key_prefix: mapped_tip_key = 'clickbait'
 
+            if mapped_tip_key and any(rf.startswith(risk_key_prefix.split('_')[0]) for rf in risk_factors):
+                 # Check if the specific risk_key_prefix (or its root) is present in risk_factors
+                 if any(risk_key_prefix in rf_actual for rf_actual in risk_factors):
+                    return contextual_tips.get(mapped_tip_key, random.choice(TrustScoreCalculator.DID_YOU_KNOW_TIPS))
+
+
+        # Fallback if no specific contextual tip matches the detected risk factors
         return random.choice(TrustScoreCalculator.DID_YOU_KNOW_TIPS)
 
     @staticmethod
