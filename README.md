@@ -1,16 +1,23 @@
 # BiasLens
 
 ## Description
-BiasLens is a project featuring a Python library and a FastAPI backend designed to detect and analyze various types of bias, emotional tone, and other characteristics in text. It provides both quick and comprehensive analysis options. This project was initially developed for a hackathon and has been expanded to include an API and a frontend interface.
+
 
 ## Features
-- Analyzes text for potential bias using pre-trained Hugging Face models.
-- Classifies the type of bias (e.g., political, ethnic, religious).
-- Detects emotional tone and sentiment.
-- Identifies Nigerian-specific patterns, clickbait, and potential fake news indicators.
-- Calculates a trust score for the analyzed text.
-- Offers API endpoints for `quick_analyze` and `analyze` functionalities.
-- Includes a Next.js frontend for user interaction (under the `FRONTEND/` directory).
+- **Comprehensive Analysis (Deep Dive):**
+  - Utilizes pre-trained Hugging Face models to analyze text for potential bias.
+  - Classifies bias by type (e.g., political, ethnic, religious) using ML models.
+  - Detects detailed emotional tone and sentiment scores.
+- **Quick Analysis (Pattern-Based):**
+  - Provides rapid insights focusing on sentiment and basic textual patterns.
+  - Includes lightweight, pattern-based detection of potential bias types, especially for Nigerian contexts.
+- **Common Features:**
+  - Identifies Nigerian-specific linguistic patterns, clickbait indicators, and potential fake news markers.
+  - Calculates an overall trust score for the analyzed text.
+  - Returns actionable, educational tips related to media literacy to help users interpret results and learn.
+- **API & Frontend:**
+  - Exposes functionalities via a FastAPI backend with `/quick_analyze` and `/analyze` endpoints.
+  - Includes an interactive Next.js frontend for easy text submission and visualization of results.
 
 ## Project Structure
 
@@ -29,7 +36,9 @@ BiasLens is a project featuring a Python library and a FastAPI backend designed 
 │   └── utils.py              # Shared utilities (e.g., model cache)
 ├── tests/                    # Unit tests for the Python backend
 │   ├── __init__.py           # Initializes the 'tests' package
-│   └── test_analyzer.py      # Tests for the analyzer module
+│   ├── test_analyzer.py      # Tests for the analyzer module
+│   ├── test_main.py          # Tests for the FastAPI app (API endpoints)
+│   └── test_trust.py         # Tests for the trust score calculation
 ├── .gitignore                # Specifies intentionally untracked files
 ├── main.py                   # FastAPI application exposing the BiasLens API
 ├── requirements.txt          # Python dependencies for the backend/API
@@ -63,7 +72,7 @@ BiasLens is a project featuring a Python library and a FastAPI backend designed 
 
 ### API Endpoints
 
-The API expects JSON requests and returns JSON responses.
+The API expects JSON requests and returns JSON responses. The structure of the responses is defined by Pydantic models in `main.py`, ensuring validated and consistent output.
 
 1.  **Quick Analysis**
     *   **Endpoint:** `POST /quick_analyze`
@@ -73,14 +82,18 @@ The API expects JSON requests and returns JSON responses.
           "text": "Your text to analyze here."
         }
         ```
-    *   **Description:** Performs a faster, more lightweight analysis focusing on sentiment and basic patterns.
-    *   **Example Response (Illustrative):**
+    *   **Description:** Performs a faster, more lightweight analysis focusing on sentiment and basic patterns, including pattern-based Nigerian bias detection.
+    *   **Example Response:**
         ```json
         {
-          "score": 60,
+          "score": 65,
           "indicator": "🟡 Caution",
-          "explanation": ["Contains clickbait patterns"],
-          "tip": "For a more comprehensive analysis, use the full analyze function."
+          "explanation": "Quick check found: potential sentiment bias. Specific patterns suggest: Anti-Labour Party political bias.",
+          "tip": "Verify information before sharing. Check multiple reputable sources to confirm a story's accuracy.",
+          "inferred_bias_type": "Anti-Labour Party political bias",
+          "bias_category": "political",
+          "bias_target": "Labour Party",
+          "matched_keywords": ["labour party", "obi"]
         }
         ```
 
@@ -95,9 +108,9 @@ The API expects JSON requests and returns JSON responses.
           "include_detailed_results": true
         }
         ```
-    *   **Description:** Performs a full, in-depth analysis including bias type classification, emotional analysis, detailed pattern matching, and trust score calculation.
-        The request body can also include `headline` (string, optional), `include_patterns` (boolean, defaults to `true` in the core analyzer), and `include_detailed_results` (boolean, defaults to `false` in the core analyzer) to customize the analysis. The `detailed_sub_analyses` field in the response will only be populated if `include_detailed_results` is set to `true`. The `patterns` sub-field within `detailed_sub_analyses` depends on `include_patterns` being `true`.
-    *   **Example Response (Illustrative, with `include_detailed_results=True` and `include_patterns=True`):**
+    *   **Description:** Performs a full, in-depth analysis including ML-driven bias detection and type classification, emotional analysis, detailed pattern matching, and trust score calculation.
+        The request body parameters `headline` (string, optional), `include_patterns` (boolean, defaults to `true`), and `include_detailed_results` (boolean, defaults to `false`) allow customization of the analysis. The `detailed_sub_analyses` field in the response is populated if `include_detailed_results` is `true`.
+    *   **Example Response (with `include_detailed_results=true` and `include_patterns=true`):**
         ```json
         {
           "trust_score": 75,
@@ -105,87 +118,87 @@ The API expects JSON requests and returns JSON responses.
           "explanation": [
             "The content appears largely objective with neutral sentiment.",
             "No significant emotional manipulation tactics identified.",
-            "Bias analysis did not flag strong indications of specific bias types."
+            "Bias analysis did not flag strong indications of specific bias types based on ML models."
           ],
-          "tip": "While generally trustworthy, always consider the source and context. For critical information, seek diverse perspectives.",
-          "primary_bias_type": null,
-          "metadata": {
-            "component_processing_times": {
-              "sentiment_analysis": 0.0152,
-              "emotion_analysis": 0.0521,
-              "bias_analysis": 0.0803,
-              "pattern_analysis": 0.0025,
-              "trust_score_calculation": 0.0030,
-              "overall_assessment_generation": 0.0006
-            },
-            "overall_processing_time_seconds": 0.1537,
-            "text_length": 180,
-            "initialized_components": ["sentiment", "emotion", "bias_detection", "bias_classification"],
-            "analysis_timestamp": 1678886400.123456
+          "tip": "Understand that all sources can have some level of bias. Seek diverse perspectives to get a fuller picture.",
+          "primary_bias_type": "Neutral",
+          "bias_details": {
+            "detected": false,
+            "label": "Likely Neutral (confidence: 0.880)",
+            "confidence": 0.95
+          },
+          "sentiment_details": {
+            "label": "neutral",
+            "confidence": 0.85
+          },
+          "emotion_details": {
+            "label": "neutral",
+            "confidence": 0.90,
+            "is_emotionally_charged": false,
+            "manipulation_risk": "low"
+          },
+          "pattern_highlights": {
+            "nigerian_context_detected": false,
+            "clickbait_detected": false,
+            "fake_news_risk": "low"
+          },
+          "lightweight_nigerian_bias_assessment": {
+            "inferred_bias_type": "No specific patterns detected",
+            "bias_category": null,
+            "bias_target": null,
+            "matched_keywords": []
           },
           "detailed_sub_analyses": {
             "sentiment": {
               "label": "neutral",
               "confidence": 0.85,
-              "all_scores": {
-                "negative": 0.05,
-                "neutral": 0.85,
-                "positive": 0.10
-              }
+              "all_scores": { "negative": 0.05, "neutral": 0.85, "positive": 0.10 },
+              "headline_comparison": null
             },
             "emotion": {
               "label": "neutral",
               "confidence": 0.90,
               "is_emotionally_charged": false,
               "manipulation_risk": "low"
+              // ... further details like emotion_scores ...
             },
             "bias": {
               "flag": false,
-              "label": "No significant bias detected.",
-              "type_analysis": {
-                "type": "neutral",
-                "confidence": 0.95
-              },
+              "label": "Likely Neutral (confidence: 0.880)",
+              "type_analysis": { "type": "neutral", "confidence": 0.95 /*, ... all_predictions ... */ },
               "detected": false
             },
             "patterns": {
-              "nigerian_patterns": {
-                "has_triggers": false,
-                "has_clickbait": false,
-                "trigger_details": [],
-                "clickbait_details": []
-              },
-              "fake_news": {
-                "detected": false,
-                "details": {
-                  "risk_level": "low",
-                  "matched_phrases": []
-                }
-              },
-              "viral_manipulation": {
-                "engagement_bait_score": 0.1,
-                "sensationalism_score": 0.05,
-                "is_potentially_viral": false
-              }
+              "nigerian_patterns": { "has_triggers": false, "has_clickbait": false /*, ... trigger_details, clickbait_details ... */ },
+              "fake_news": { "detected": false, "details": { "risk_level": "low" /*, ... matched_phrases ... */ } },
+              "viral_manipulation": { "is_potentially_viral": false /*, ... other scores ... */ }
+            },
+            "lightweight_nigerian_bias": {
+              "inferred_bias_type": "No specific patterns detected",
+              "bias_category": null,
+              "bias_target": null,
+              "matched_keywords": []
             }
           }
         }
         ```
 
 **Note on API Usage Examples:**
-The example responses above are illustrative. The actual structure and content can vary based on the input text and analysis parameters. The full structure can be explored via the `/docs` endpoint when the API is running. You can use tools like `curl` or Postman, or Python's `requests` library to interact with these endpoints.
+The example responses above are illustrative. The actual structure and content can vary based on the input text and analysis parameters. The full response structure is defined by Pydantic models in `main.py` and can be explored via the `/docs` endpoint when the API is running. You can use tools like `curl` or Postman, or Python's `requests` library to interact with these endpoints.
 
 For example, using `curl`:
 ```bash
 curl -X POST "http://127.0.0.1:8000/analyze" \
      -H "Content-Type: application/json" \
-     -d '{"text": "This is a test sentence for the BiasLens API."}'
+     -d '{"text": "This is a test sentence for the BiasLens API.", "include_detailed_results": false}'
 ```
 
 ## Frontend Application
 The `FRONTEND/` directory contains a Next.js application that provides a user interface for interacting with the BiasLens API. Please refer to `FRONTEND/README.md` for instructions on how to set up and run the frontend.
 
-The frontend makes calls to the backend API. Note that the `FRONTEND/app/analyze/page.tsx` file currently uses `/api/analyze` for deep analysis. If you are running the frontend and backend separately without a proxy, ensure the API endpoint URLs in the frontend configuration match the running backend address (e.g., `http://localhost:8000/analyze`). The `userId` field sent by the frontend is not currently used by the backend Pydantic model.
+The frontend is designed to interact with the Python/FastAPI backend described in this README. For local development, ensure `NEXT_PUBLIC_API_BASE_URL` in the frontend's environment variables (e.g., in `FRONTEND/.env.local`) is set to your running Python backend (e.g., `http://localhost:8000`).
+
+*Alternative Analysis Route*: The frontend codebase also contains a Next.js API route at `FRONTEND/app/api/analyze/route.ts` which uses OpenAI's GPT models for analysis and logs to a Supabase database (requiring separate Supabase environment variables). If `NEXT_PUBLIC_API_BASE_URL` is not set or points to the frontend itself, the "Deep Analysis" feature on the example UI may call this route instead of the Python backend. The `userId` field, for instance, is used by this Next.js/OpenAI route, not by the main Python/FastAPI backend. For the custom model analysis detailed here, ensure you are targeting the Python backend.
 
 ## Models Used
 The `biaslens` Python library utilizes the following Hugging Face models by default:
@@ -211,11 +224,21 @@ print(quick_results)
 
 # Comprehensive Analysis
 text_to_analyze_full = "This is another sample text which might contain some subtle biases that require a deeper look."
-full_analysis = analyze(text_to_analyze_full)
+# Example with all parameters for the core analyze function
+full_analysis = analyze(
+    text=text_to_analyze_full,
+    headline="Optional Headline Here",
+    include_patterns=True,
+    include_detailed_results=True
+)
 print("\nComprehensive Analysis Results:")
 print(full_analysis)
 ```
 Refer to the example outputs under the "API Endpoints" section for an idea of the structure of the returned dictionaries.
+The dictionaries returned by direct Python calls to `analyze()` and `quick_analyze()` will have the same structure as the JSON responses shown in the API Endpoints section (e.g., no `metadata` field in `analyze()`'s output, new top-level fields like `sentiment_details`, etc.).
+
+## Our Journey: From Hackathon Spark to Evolving Tool
+BiasLens began its journey as a hackathon project, driven by the goal of creating a simple yet effective tool for uncovering bias in text. The initial version laid the groundwork for what has become a more nuanced and feature-rich analyzer. This evolution highlights our commitment to iterative development and the potential for hackathon ideas to mature into robust open-source solutions. We continue to explore new ways to enhance its capabilities.
 
 ## Future Improvements
 -   Support for more languages beyond English.
@@ -235,6 +258,3 @@ Contributions are welcome! Please follow these general steps:
 
 ## License
 This project is currently unlicensed. Consider adding an open-source license (e.g., MIT, Apache 2.0) if you plan to share or distribute this code widely.
-
-## Hackathon Project
-This project was initiated as part of a hackathon, aiming to create a tool for identifying potential bias in textual content, and has since evolved.
