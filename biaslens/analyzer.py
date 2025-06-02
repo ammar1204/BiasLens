@@ -82,135 +82,119 @@ class BiasLensAnalyzer:
         if not text or not text.strip():
             # FIXED: Consistent return structure with all required fields
             return {
-                'trust_score': None,
-                'indicator': 'Error',
-                'explanation': ["Empty or invalid text provided"],
-                'tip': "Analysis failed: No text was provided. Please input text for analysis.", # MODIFIED
+                'trust_score': None, 'indicator': 'Error', 'explanation': ["Empty or invalid text provided."],
+                'tip': "Analysis failed: No text was provided. Please input text for analysis.",
                 'primary_bias_type': None,
-                'metadata': {
-                    'component_processing_times': {},
-                    'overall_processing_time_seconds': 0
-                }
+                'sentiment_details': None, 'emotion_details': None, 'bias_details': None,
+                'pattern_highlights': None, 'lightweight_nigerian_bias_assessment': None
+                # Removed metadata
             }
 
-        overall_start_time = time.time()
-        component_processing_times = {}
+        # Removed timing variables as metadata is removed
 
         try:
-            # Core ML Analysis
-            step_start_time = time.time()
             sentiment_result = self._analyze_sentiment_safe(text, headline)
-            component_processing_times['sentiment_analysis'] = round(time.time() - step_start_time, 4)
-
-            step_start_time = time.time()
             emotion_result = self._analyze_emotion_safe(text)
-            component_processing_times['emotion_analysis'] = round(time.time() - step_start_time, 4)
+            bias_result = self._analyze_bias_safe(text) 
 
-            step_start_time = time.time()
-            bias_result = self._analyze_bias_safe(text)
-            component_processing_times['bias_analysis'] = round(time.time() - step_start_time, 4)
-
-            # Pattern Analysis (Nigerian-specific)
-            step_start_time = time.time()
-            pattern_result = self._analyze_patterns_safe(text) if include_patterns else {}
-            component_processing_times['pattern_analysis'] = round(time.time() - step_start_time, 4)
-            
-            # Lightweight Nigerian Bias Assessment (always run for comprehensive analysis if patterns are included)
-            lightweight_nigerian_bias_info = {}
-            if include_patterns: # Assuming this is the right flag to also get the lightweight assessment
-                step_start_time = time.time()
+            pattern_result = {}
+            lightweight_nigerian_bias_info = {} 
+            if include_patterns:
+                pattern_result = self._analyze_patterns_safe(text)
                 lightweight_nigerian_bias_info = self._nigerian_bias_enhancer.get_lightweight_bias_assessment(text)
-                component_processing_times['lightweight_nigerian_bias_assessment'] = round(time.time() - step_start_time, 4)
-
-
-            # Calculate Trust Score
-            step_start_time = time.time()
+            
             trust_result = self._calculate_trust_score_safe(
                 text, sentiment_result, emotion_result, bias_result
             )
-            component_processing_times['trust_score_calculation'] = round(time.time() - step_start_time, 4)
-
-            # Generate Overall Assessment (even if not all parts are in final dict, it's a step)
-            step_start_time = time.time()
-            overall_assessment = self._generate_overall_assessment(
-                sentiment_result, emotion_result, bias_result, trust_result
-            )
-            component_processing_times['overall_assessment_generation'] = round(time.time() - step_start_time, 4)
-
-            overall_processing_time = round(time.time() - overall_start_time, 4)
-
-            # FIXED: Better bias type extraction with proper error handling
-            primary_bias_type_value = None  # Default
-            if bias_result.get('flag', False):
-                bias_type_info = bias_result.get('type_analysis', {})
-                detected_type = bias_type_info.get('type')
-
-                # Handle all possible bias type values properly
-                if detected_type and isinstance(detected_type, str) and detected_type.strip():
-                    detected_type = detected_type.strip().lower()
-                    if detected_type not in ['neutral', 'no bias', 'analysis_error', '']:
-                        primary_bias_type_value = detected_type
-                    elif detected_type in ['neutral', 'no bias']:
-                        primary_bias_type_value = "neutral"
-                    # If 'analysis_error' or empty string, remains None
             
-            # If ML based primary_bias_type_value is None, check lightweight assessment
-            if primary_bias_type_value is None and lightweight_nigerian_bias_info.get("inferred_bias_type") and lightweight_nigerian_bias_info["inferred_bias_type"] != "No specific patterns detected":
-                primary_bias_type_value = lightweight_nigerian_bias_info["inferred_bias_type"]
+            # _generate_overall_assessment is called but its main output isn't directly part of final_result
+            self._generate_overall_assessment(
+                 sentiment_result, emotion_result, bias_result, trust_result
+            )
 
+            primary_bias_type_value = None
+            if bias_result.get('flag', False): 
+                bias_type_info_ml = bias_result.get('type_analysis', {})
+                detected_type_ml = bias_type_info_ml.get('type')
+                if detected_type_ml and isinstance(detected_type_ml, str) and detected_type_ml.strip():
+                    detected_type_ml_lower = detected_type_ml.strip().lower()
+                    if detected_type_ml_lower not in ['neutral', 'no bias', 'analysis_error', '']:
+                        primary_bias_type_value = detected_type_ml_lower
+                    elif detected_type_ml_lower in ['neutral', 'no bias']:
+                         primary_bias_type_value = "neutral"
+            
+            if primary_bias_type_value is None or primary_bias_type_value == "neutral": 
+                lw_bias_type = lightweight_nigerian_bias_info.get("inferred_bias_type")
+                if lw_bias_type and lw_bias_type not in ["No specific patterns detected", "Nigerian context detected, specific bias type unclear from patterns"]:
+                    primary_bias_type_value = lw_bias_type
+            
+            sentiment_details = {
+                'label': sentiment_result.get('label'),
+                'confidence': sentiment_result.get('confidence')
+            }
+            emotion_details = {
+                'label': emotion_result.get('label'),
+                'confidence': emotion_result.get('confidence'),
+                'is_emotionally_charged': emotion_result.get('is_emotionally_charged', False),
+                'manipulation_risk': emotion_result.get('manipulation_risk')
+            }
+            bias_details_payload = { 
+                'detected': bias_result.get('flag', False),
+                'label': bias_result.get('label'), 
+                'confidence': bias_result.get('type_analysis', {}).get('confidence')
+            }
+
+            np_data = pattern_result.get('nigerian_patterns', {}) if isinstance(pattern_result.get('nigerian_patterns'), dict) else {}
+            fn_data = pattern_result.get('fake_news', {}) if isinstance(pattern_result.get('fake_news'), dict) else {}
+            vm_data = pattern_result.get('viral_manipulation', {}) if isinstance(pattern_result.get('viral_manipulation'), dict) else {}
+            
+            fn_details = fn_data.get('details', {}) if isinstance(fn_data.get('details'), dict) else {}
+
+            pattern_highlights = {
+                'nigerian_context_detected': bool(lightweight_nigerian_bias_info.get('matched_keywords')) or \
+                                           np_data.get('has_triggers', False),
+                'clickbait_detected': np_data.get('has_clickbait', False) or \
+                                    fn_details.get('is_clickbait', False) or \
+                                    vm_data.get('is_potentially_viral', False),
+                'fake_news_risk': fn_details.get('risk_level')
+            }
 
             final_result = {
                 'trust_score': trust_result.get('score'),
                 'indicator': trust_result.get('indicator'),
                 'explanation': trust_result.get('explanation'),
-                'tip': trust_result.get('tip'),
+                'tip': trust_result.get('tip'), 
                 'primary_bias_type': primary_bias_type_value,
-                'metadata': {
-                    'component_processing_times': component_processing_times,
-                    'overall_processing_time_seconds': overall_processing_time,
-                    'text_length': len(text),
-                    'initialized_components': list(self._initialized_components),
-                    'analysis_timestamp': time.time()
-                }
+                'sentiment_details': sentiment_details,
+                'emotion_details': emotion_details,
+                'bias_details': bias_details_payload,
+                'pattern_highlights': pattern_highlights,
+                'lightweight_nigerian_bias_assessment': lightweight_nigerian_bias_info if include_patterns and lightweight_nigerian_bias_info else None,
             }
             
-            # Add lightweight Nigerian bias info to the main result if available
-            if lightweight_nigerian_bias_info:
-                final_result['lightweight_nigerian_bias_assessment'] = lightweight_nigerian_bias_info
-
-
-            # FIXED: Simplified pattern result handling
             if include_detailed_results:
                 final_result['detailed_sub_analyses'] = {
-                    'sentiment': sentiment_result,
-                    'emotion': emotion_result,
-                    'bias': bias_result
+                    'sentiment': sentiment_result, 
+                    'emotion': emotion_result,     
+                    'bias': bias_result,           
                 }
                 if include_patterns:
-                    # Always include patterns section if requested, even if empty due to errors
-                    final_result['detailed_sub_analyses']['patterns'] = pattern_result
-                    # Also include lightweight assessment in detailed if patterns are included
-                    final_result['detailed_sub_analyses']['lightweight_nigerian_bias'] = lightweight_nigerian_bias_info
-
-
+                    final_result['detailed_sub_analyses']['patterns'] = pattern_result 
+                    if lightweight_nigerian_bias_info:
+                        final_result['detailed_sub_analyses']['lightweight_nigerian_bias'] = lightweight_nigerian_bias_info
+            
             return final_result
 
         except Exception as e:
-            overall_processing_time = round(time.time() - overall_start_time, 4)
             logger.error(f"Analysis failed due to an unexpected error: {str(e)}", exc_info=True)
-
-            # FIXED: Consistent return structure matching success case
             return {
-                'trust_score': None,
-                'indicator': 'Error',
+                'trust_score': None, 'indicator': 'Error', 
                 'explanation': [f"An error occurred during analysis: {str(e)}"],
-                'tip': "Analysis failed due to an unexpected error. Please try again later or contact support.", # MODIFIED
+                'tip': "Analysis failed due to an unexpected error. Please try again later or contact support.",
                 'primary_bias_type': None,
-                'metadata': {
-                    'component_processing_times': component_processing_times,
-                    'overall_processing_time_seconds': overall_processing_time,
-                    'error_message': str(e)
-                }
+                'sentiment_details': None, 'emotion_details': None, 'bias_details': None,
+                'pattern_highlights': None, 'lightweight_nigerian_bias_assessment': None,
+                # No 'metadata' field here
             }
 
     def quick_analyze(self, text: str) -> Dict:
