@@ -2,6 +2,7 @@
 
 ## Description
 BiasLens is an open-source text analysis tool born out of a hackathon project and continuously evolving. It provides a Python library and a FastAPI backend to detect and analyze various textual characteristics, with a focus on identifying potential biases, emotional tones, and manipulative patterns. Offering both quick, pattern-based insights and comprehensive, model-driven analysis, BiasLens aims to promote media literacy by providing users with nuanced understanding of text. The project also includes a Next.js frontend for interactive use.
+Live link: https://biaslens-five.vercel.app/
 
 ## Features
 - **Comprehensive Analysis (Deep Dive):**
