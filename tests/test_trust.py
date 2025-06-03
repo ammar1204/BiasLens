@@ -59,7 +59,7 @@ class TestTrustScoreCalculator(unittest.TestCase):
             with self.subTest(risk_factors=risk_factors):
                 tip = TrustScoreCalculator._get_contextual_tip(risk_factors)
                 self.assertEqual(tip, expected_tip)
-    
+
     def test_get_contextual_tip_priority(self):
         """Test priority of contextual tips."""
         # fake_risk should be prioritized over nigerian_triggers if both are present in some form
@@ -110,12 +110,12 @@ class TestTrustScoreCalculator(unittest.TestCase):
         bias_data_mock = {'flag': False, 'type_analysis': {'type': 'neutral'}}
         emotion_data_mock = {'manipulation_risk': 'minimal', 'is_emotionally_charged': False}
         sentiment_data_mock = {'label': 'neutral', 'bias_indicator': False, 'is_polarized': False, 'polarization_score': 0}
-        
+
         score, indicator, explanation, tip, extras = TrustScoreCalculator.calculate(
             bias_score=0.2, emotion_score=0.1, sentiment_label='neutral', text="Neutral text.",
             emotion_data=emotion_data_mock, sentiment_data=sentiment_data_mock, bias_data=bias_data_mock
         )
-        
+
         # Assert that _get_contextual_tip was called (implicitly, by checking its return value is used)
         self.assertEqual(tip, expected_tip_from_contextual)
         # We can also check that it was called with the generated risk_factors if we want more detail
