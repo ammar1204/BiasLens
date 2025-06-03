@@ -7,26 +7,44 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, AlertTriangle, CheckCircle, XCircle, Brain, TrendingUp, MessageSquare, Info, Zap, EyeOff, Newspaper, Lightbulb, Gauge, Palette, Fingerprint, Sparkles, ShieldCheck, BarChart3 } from "lucide-react"; // Added more icons
+import { Loader2, AlertTriangle, CheckCircle, XCircle, Brain, TrendingUp, MessageSquare, Info, Zap, EyeOff, Newspaper, Lightbulb, Gauge, Palette, Fingerprint, Sparkles, ShieldCheck, BarChart3, SearchCheck } from "lucide-react"; // Added more icons
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 
 // --- TypeScript Interfaces for API Responses ---
+
+// --- "Quick" Analysis Interfaces ---
+interface QuickToneAnalysisModel {
+  sentiment_label?: string | null;
+  sentiment_confidence?: number | null;
+}
+
+// LightweightNigerianBiasAssessmentModel is reused for bias_analysis in QuickAnalysisResult
+
+interface QuickManipulationAnalysisModel {
+  is_clickbait?: boolean | null;
+}
+
+interface QuickVeracitySignalsModel {
+  fake_news_risk_level?: string | null;
+  matched_suspicious_phrases?: string[] | null;
+}
 
 interface QuickAnalysisResult {
   score: number | null;
   indicator: string | null;
   explanation: string | null;
   tip: string | null;
-  inferred_bias_type?: string | null;
-  bias_category?: string | null;
-  bias_target?: string | null;
-  matched_keywords?: string[] | null;
+  // New structured fields for quick_analyze
+  tone_analysis?: QuickToneAnalysisModel | null;
+  bias_analysis?: LightweightNigerianBiasAssessmentModel | null; // Reusing this existing detailed model
+  manipulation_analysis?: QuickManipulationAnalysisModel | null;
+  veracity_signals?: QuickVeracitySignalsModel | null;
 }
 
-// --- "Core Solution" Interfaces for Deep Analysis (/analyze endpoint) ---
 
-interface ToneAnalysisModel {
+// --- "Core Solution" Interfaces for Deep Analysis (/analyze endpoint) ---
+interface ToneAnalysisModel { // For Deep Analysis
   primary_tone?: string | null;
   is_emotionally_charged?: boolean | null;
   emotional_manipulation_risk?: string | null;
@@ -34,25 +52,25 @@ interface ToneAnalysisModel {
   sentiment_confidence?: number | null;
 }
 
-interface BiasAnalysisModel {
+interface BiasAnalysisModel { // For Deep Analysis
   primary_bias_type?: string | null;
   bias_strength_label?: string | null;
   ml_model_confidence?: number | null;
   source_of_primary_bias?: string | null;
 }
 
-interface ManipulationAnalysisModel {
+interface ManipulationAnalysisModel { // For Deep Analysis
   is_clickbait?: boolean | null;
-  engagement_bait_score?: number | null; // Assuming this might be float or null
-  sensationalism_score?: number | null; // Assuming this might be float or null
+  engagement_bait_score?: number | null;
+  sensationalism_score?: number | null;
 }
 
-interface VeracitySignalsModel {
+interface VeracitySignalsModel { // For Deep Analysis
   fake_news_risk_level?: string | null;
   matched_suspicious_phrases?: string[] | null;
 }
 
-interface LightweightNigerianBiasAssessmentModel { // Should be consistent with backend
+interface LightweightNigerianBiasAssessmentModel {
   inferred_bias_type?: string | null;
   bias_category?: string | null;
   bias_target?: string | null;
@@ -127,7 +145,7 @@ interface PatternDetail {
 interface DetailedSubAnalysesResult {
   sentiment: SentimentDetail | null;
   emotion: EmotionDetail | null;
-  bias: BiasDetail | null; // Full ML model bias output
+  bias: BiasDetail | null;
   patterns?: PatternDetail | null;
   lightweight_nigerian_bias?: LightweightNigerianBiasAssessmentModel | null;
 }
@@ -139,13 +157,12 @@ interface DeepAnalysisResult {
   explanation: string[] | null;
   tip: string | null;
 
-  // New "Core Solution" structured fields
   tone_analysis?: ToneAnalysisModel | null;
   bias_analysis?: BiasAnalysisModel | null;
   manipulation_analysis?: ManipulationAnalysisModel | null;
   veracity_signals?: VeracitySignalsModel | null;
 
-  lightweight_nigerian_bias_assessment?: LightweightNigerianBiasAssessmentModel | null; // Retained top-level for direct access
+  lightweight_nigerian_bias_assessment?: LightweightNigerianBiasAssessmentModel | null;
 
   detailed_sub_analyses?: DetailedSubAnalysesResult | null;
 }
@@ -214,7 +231,7 @@ export default function AnalyzePage() {
     } finally { setAnalyzing(false); }
   }
 
-  const getTrustScoreColor = (score: number | null) => { /* ... (no change) ... */
+  const getTrustScoreColor = (score: number | null) => {
     if (score === null) return "text-gray-600";
     if (score >= 70) return "text-green-600";
     if (score >= 40) return "text-yellow-600";
@@ -254,7 +271,7 @@ export default function AnalyzePage() {
     );
   };
 
-  const renderCoreSolutionDetails = (res: DeepAnalysisResult) => {
+  const renderCoreSolutionDetails = (res: DeepAnalysisResult) => { // For Deep Analysis
     if (!res.tone_analysis && !res.bias_analysis && !res.manipulation_analysis && !res.veracity_signals) {
       return null;
     }
@@ -262,10 +279,30 @@ export default function AnalyzePage() {
       <>
         <h2 className="text-2xl font-semibold mt-8 mb-4 border-b pb-2">Key Analysis Insights</h2>
         <div className="grid md:grid-cols-2 gap-6">
-          {res.tone_analysis && renderSubDetail("Tone & Sentiment", res.tone_analysis, <Palette />, "Overall emotional tone and sentiment.")}
-          {res.bias_analysis && renderSubDetail("Bias Insights", res.bias_analysis, <EyeOff />, "Detected bias type and strength.")}
+          {res.tone_analysis && renderSubDetail("Tone & Sentiment", res.tone_analysis, <Palette />, "Overall emotional tone and sentiment perception.")}
+          {res.bias_analysis && renderSubDetail("Bias Insights", res.bias_analysis, <EyeOff />, "Detected bias type, strength, and source.")}
           {res.manipulation_analysis && renderSubDetail("Manipulation Tactics", res.manipulation_analysis, <Fingerprint />, "Presence of clickbait or manipulative patterns.")}
-          {res.veracity_signals && renderSubDetail("Veracity Signals", res.veracity_signals, <ShieldCheck />, "Indicators related to content reliability.")}
+          {res.veracity_signals && renderSubDetail("Veracity Signals", res.veracity_signals, <ShieldCheck />, "Indicators related to content reliability and authenticity.")}
+        </div>
+      </>
+    )
+  }
+
+  const renderQuickAnalysisCoreDetails = (res: QuickAnalysisResult) => {
+    if (!res.tone_analysis && !res.bias_analysis && !res.manipulation_analysis && !res.veracity_signals) {
+      return null;
+    }
+    return (
+      <>
+        <h2 className="text-xl font-semibold mt-6 mb-3 border-b pb-1">Quick Insights Overview</h2>
+        <div className="grid md:grid-cols-2 gap-4">
+          {res.tone_analysis && renderSubDetail("Quick Tone", res.tone_analysis, <MessageSquare />)}
+          {/* Bias Analysis for Quick Mode uses LightweightNigerianBiasAssessmentModel directly */}
+          {res.bias_analysis && (res.bias_analysis.inferred_bias_type && res.bias_analysis.inferred_bias_type !== "No specific patterns detected" && res.bias_analysis.inferred_bias_type !== "Nigerian context detected, specific bias type unclear from patterns") &&
+            renderSubDetail("Quick Pattern Bias", res.bias_analysis, <Sparkles />)
+          }
+          {res.manipulation_analysis && renderSubDetail("Quick Manipulation", res.manipulation_analysis, <Fingerprint />)}
+          {res.veracity_signals && renderSubDetail("Quick Veracity", res.veracity_signals, <SearchCheck />)}
         </div>
       </>
     )
@@ -290,7 +327,7 @@ export default function AnalyzePage() {
       {apiError && ( <Card className="mb-8 bg-red-50 dark:bg-red-900 border-red-500 dark:border-red-700"> <CardHeader> <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-300"> <AlertTriangle /> Analysis Error </CardTitle> </CardHeader> <CardContent> <p className="text-red-600 dark:text-red-400">{apiError}</p> </CardContent> </Card> )}
       {result && !apiError && (
         <div className="space-y-6">
-          <Card>
+          <Card> {/* Overall Assessment Card */}
             <CardHeader> <CardTitle className="flex items-center gap-2"> <Gauge className="h-5 w-5 text-primary" /> Overall Assessment </CardTitle> </CardHeader>
             <CardContent className="space-y-4">
               {((analysisMode === 'deep' && (result as DeepAnalysisResult).trust_score !== null) || (analysisMode === 'quick' && (result as QuickAnalysisResult).score !== null)) ? (
@@ -304,24 +341,31 @@ export default function AnalyzePage() {
               ) : <p className="text-muted-foreground">Trust score not available.</p>}
               <div className="mt-4"> <h4 className="font-semibold mb-1">Explanation:</h4> {Array.isArray(result.explanation) ? (result.explanation as string[]).map((line, index) => <p key={index} className="text-muted-foreground leading-relaxed">{line}</p>) : <p className="text-muted-foreground leading-relaxed">{result.explanation || "No explanation provided."}</p> } </div>
               <div className="mt-4"> <h4 className="font-semibold mb-1">Tip:</h4> <p className="text-muted-foreground leading-relaxed flex items-start gap-2"> <Lightbulb className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-1" /> <span>{result.tip || "No specific tip provided."}</span> </p> </div>
-              {/* Primary Bias Type from bias_analysis is now shown in renderCoreSolutionDetails */}
             </CardContent>
           </Card>
 
+          {/* Render "Core Solution" details for Deep Analysis */}
           {analysisMode === 'deep' && renderCoreSolutionDetails(result as DeepAnalysisResult)}
 
-          {( (result as QuickAnalysisResult | DeepAnalysisResult).lightweight_nigerian_bias_assessment?.inferred_bias_type &&
-            (result as QuickAnalysisResult | DeepAnalysisResult).lightweight_nigerian_bias_assessment?.inferred_bias_type !== "No specific patterns detected" &&
-            (result as QuickAnalysisResult | DeepAnalysisResult).lightweight_nigerian_bias_assessment?.inferred_bias_type !== "Nigerian context detected, specific bias type unclear from patterns") &&
+          {/* Render "Core Solution" details for Quick Analysis */}
+          {analysisMode === 'quick' && renderQuickAnalysisCoreDetails(result as QuickAnalysisResult)}
+
+          {/* Display LightweightNigerianBiasAssessment for Deep Analysis (if not covered by quick's bias_analysis)
+              Note: Quick mode's bias_analysis IS the LightweightNigerianBiasAssessment.
+              For Deep mode, it's a separate top-level field if patterns are included.
+          */}
+          {analysisMode === 'deep' && (result as DeepAnalysisResult).lightweight_nigerian_bias_assessment?.inferred_bias_type &&
+            (result as DeepAnalysisResult).lightweight_nigerian_bias_assessment?.inferred_bias_type !== "No specific patterns detected" &&
+            (result as DeepAnalysisResult).lightweight_nigerian_bias_assessment?.inferred_bias_type !== "Nigerian context detected, specific bias type unclear from patterns" &&
           (
             <Card>
               <CardHeader> <CardTitle className="flex items-center gap-2"> <Sparkles className="h-5 w-5 text-purple-500" /> Lightweight Nigerian Bias Assessment </CardTitle> <CardDescription>Rule-based detection of Nigerian-specific bias patterns.</CardDescription> </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <div><span className="font-semibold">Inferred Bias Type:</span> {(result as QuickAnalysisResult | DeepAnalysisResult).lightweight_nigerian_bias_assessment!.inferred_bias_type}</div>
-                {(result as QuickAnalysisResult | DeepAnalysisResult).lightweight_nigerian_bias_assessment!.bias_category && <div><span className="font-semibold">Category:</span> <Badge variant="outline">{(result as QuickAnalysisResult | DeepAnalysisResult).lightweight_nigerian_bias_assessment!.bias_category}</Badge></div>}
-                {(result as QuickAnalysisResult | DeepAnalysisResult).lightweight_nigerian_bias_assessment!.bias_target && <div><span className="font-semibold">Target:</span> <Badge variant="outline">{(result as QuickAnalysisResult | DeepAnalysisResult).lightweight_nigerian_bias_assessment!.bias_target}</Badge></div>}
-                {(result as QuickAnalysisResult | DeepAnalysisResult).lightweight_nigerian_bias_assessment!.matched_keywords && (result as QuickAnalysisResult | DeepAnalysisResult).lightweight_nigerian_bias_assessment!.matched_keywords!.length > 0 && (
-                  <div> <span className="font-semibold">Matched Keywords:</span> <div className="flex flex-wrap gap-1 mt-1"> {(result as QuickAnalysisResult | DeepAnalysisResult).lightweight_nigerian_bias_assessment!.matched_keywords!.map(keyword => ( <Badge key={keyword} variant="secondary" className="text-xs">{keyword}</Badge> ))} </div> </div>
+                <div><span className="font-semibold">Inferred Bias Type:</span> {(result as DeepAnalysisResult).lightweight_nigerian_bias_assessment!.inferred_bias_type}</div>
+                {(result as DeepAnalysisResult).lightweight_nigerian_bias_assessment!.bias_category && <div><span className="font-semibold">Category:</span> <Badge variant="outline">{(result as DeepAnalysisResult).lightweight_nigerian_bias_assessment!.bias_category}</Badge></div>}
+                {(result as DeepAnalysisResult).lightweight_nigerian_bias_assessment!.bias_target && <div><span className="font-semibold">Target:</span> <Badge variant="outline">{(result as DeepAnalysisResult).lightweight_nigerian_bias_assessment!.bias_target}</Badge></div>}
+                {(result as DeepAnalysisResult).lightweight_nigerian_bias_assessment!.matched_keywords && (result as DeepAnalysisResult).lightweight_nigerian_bias_assessment!.matched_keywords!.length > 0 && (
+                  <div> <span className="font-semibold">Matched Keywords:</span> <div className="flex flex-wrap gap-1 mt-1"> {(result as DeepAnalysisResult).lightweight_nigerian_bias_assessment!.matched_keywords!.map(keyword => ( <Badge key={keyword} variant="secondary" className="text-xs">{keyword}</Badge> ))} </div> </div>
                 )}
               </CardContent>
             </Card>
