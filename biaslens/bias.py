@@ -154,7 +154,7 @@ class NigerianBiasEnhancer:
             "arewa": "Pro-Northern regional bias", # Can be neutral or pro
             "biafra": "Pro-Biafran regional bias" # Can be neutral or pro
         }
-        
+
         matched_keywords_for_result = []
 
         # Look for specific matches and determine bias direction
@@ -168,7 +168,7 @@ class NigerianBiasEnhancer:
             if term in political_parties:
                 bias_direction = self._determine_bias_direction_lightweight(text_lower, term)
                 # Default to the mapping, then adjust based on sentiment
-                specific_type = political_parties[term] 
+                specific_type = political_parties[term]
                 target_term = term.upper()
                 if "obi" in term: target_term = "Peter Obi" # Proper Noun
                 if "tinubu" in term: target_term = "Tinubu"
@@ -195,12 +195,12 @@ class NigerianBiasEnhancer:
                 if term == "nyamiri": target_ethnic_group = "Igbo"
                 elif term == "aboki": target_ethnic_group = "Hausa/Fulani" # General term for Northerners
                 elif term == "gambari": target_ethnic_group = "Hausa"
-                
+
                 # For derogatory terms, it's almost always "Anti-"
                 # For neutral group terms, it might need sentiment analysis, but the map already implies "Anti-"
                 # This logic assumes the predefined map is correct for general cases.
                 return {
-                    "inferred_bias_type": ethnic_groups[term], 
+                    "inferred_bias_type": ethnic_groups[term],
                     "bias_target": target_ethnic_group,
                     "bias_category": "ethnic",
                     "matched_keywords": [term]
@@ -229,7 +229,7 @@ class NigerianBiasEnhancer:
                     "bias_category": "regional",
                     "matched_keywords": [term]
                 }
-        
+
         # If loop completes without returning, means no specific pattern was matched from the first term
         # or the term didn't fall into these specific categories
         if matched_keywords_for_result: # If there were matches, but not specific enough for above
@@ -237,7 +237,7 @@ class NigerianBiasEnhancer:
                 "inferred_bias_type": "Nigerian context detected, specific bias type unclear from patterns",
                 "bias_category": nigerian_matches[0]['category'] if nigerian_matches else None, # Category of the first match
                 "bias_target": None,
-                "matched_keywords": matched_keywords_for_result 
+                "matched_keywords": matched_keywords_for_result
             }
         return None
 

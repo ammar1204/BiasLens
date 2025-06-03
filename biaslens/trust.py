@@ -673,7 +673,7 @@ class TrustScoreCalculator:
             'nigerian_triggers',
             'clickbait'
         ]
-        
+
         for risk_key_prefix in priority_risks:
             # Map specific risk_factors (like 'high_fake_risk') to general contextual_tips keys (like 'fake_risk')
             mapped_tip_key = None

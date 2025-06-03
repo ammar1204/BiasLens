@@ -68,133 +68,142 @@ class BiasLensAnalyzer:
                 headline: Optional[str] = None, include_detailed_results: bool = False) -> Dict:
         """
         Comprehensive analysis of text for bias, manipulation, and trustworthiness.
-
-        Args:
-            text: The main text to analyze
-            include_patterns: Whether to include Nigerian-specific pattern analysis
-            headline: Optional headline for headline vs content comparison
-            include_detailed_results: If True, includes raw results from sub-analyzers.
-
-        Returns:
-            Dict containing all analysis results and overall assessment
+        New "Core Solution" based output structure.
         """
+        # Default structure for error returns, matching the new "Core Solution" structure
+        default_error_payload = {
+            'trust_score': None, 'indicator': 'Error', 'explanation': None, 'tip': None,
+            'tone_analysis': None, 'bias_analysis': None, 'manipulation_analysis': None,
+            'veracity_signals': None, 'lightweight_nigerian_bias_assessment': None,
+            'detailed_sub_analyses': None # Ensure detailed_sub_analyses is also None in error cases
+        }
 
         if not text or not text.strip():
-            # FIXED: Consistent return structure with all required fields
             return {
-                'trust_score': None, 'indicator': 'Error', 'explanation': ["Empty or invalid text provided."],
-                'tip': "Analysis failed: No text was provided. Please input text for analysis.",
-                'primary_bias_type': None,
-                'sentiment_details': None, 'emotion_details': None, 'bias_details': None,
-                'pattern_highlights': None, 'lightweight_nigerian_bias_assessment': None
-                # Removed metadata
+                **default_error_payload,
+                'explanation': ["Empty or invalid text provided."],
+                'tip': "Analysis failed: No text was provided. Please input text for analysis."
             }
 
-        # Removed timing variables as metadata is removed
-
         try:
+            # --- Stage 1: Perform all individual analyses ---
             sentiment_result = self._analyze_sentiment_safe(text, headline)
             emotion_result = self._analyze_emotion_safe(text)
-            bias_result = self._analyze_bias_safe(text) 
+            bias_result_ml = self._analyze_bias_safe(text) # ML-based bias detection
 
             pattern_result = {}
-            lightweight_nigerian_bias_info = {} 
+            lightweight_nigerian_bias_info = {}
             if include_patterns:
                 pattern_result = self._analyze_patterns_safe(text)
                 lightweight_nigerian_bias_info = self._nigerian_bias_enhancer.get_lightweight_bias_assessment(text)
-            
+
+            # --- Stage 2: Calculate Trust Score (depends on some of the above) ---
             trust_result = self._calculate_trust_score_safe(
-                text, sentiment_result, emotion_result, bias_result
-            )
-            
-            # _generate_overall_assessment is called but its main output isn't directly part of final_result
-            self._generate_overall_assessment(
-                 sentiment_result, emotion_result, bias_result, trust_result
+                text, sentiment_result, emotion_result, bias_result_ml
             )
 
-            primary_bias_type_value = None
-            if bias_result.get('flag', False): 
-                bias_type_info_ml = bias_result.get('type_analysis', {})
-                detected_type_ml = bias_type_info_ml.get('type')
-                if detected_type_ml and isinstance(detected_type_ml, str) and detected_type_ml.strip():
-                    detected_type_ml_lower = detected_type_ml.strip().lower()
-                    if detected_type_ml_lower not in ['neutral', 'no bias', 'analysis_error', '']:
-                        primary_bias_type_value = detected_type_ml_lower
-                    elif detected_type_ml_lower in ['neutral', 'no bias']:
-                         primary_bias_type_value = "neutral"
-            
-            if primary_bias_type_value is None or primary_bias_type_value == "neutral": 
-                lw_bias_type = lightweight_nigerian_bias_info.get("inferred_bias_type")
-                if lw_bias_type and lw_bias_type not in ["No specific patterns detected", "Nigerian context detected, specific bias type unclear from patterns"]:
-                    primary_bias_type_value = lw_bias_type
-            
-            sentiment_details = {
-                'label': sentiment_result.get('label'),
-                'confidence': sentiment_result.get('confidence')
-            }
-            emotion_details = {
-                'label': emotion_result.get('label'),
-                'confidence': emotion_result.get('confidence'),
-                'is_emotionally_charged': emotion_result.get('is_emotionally_charged', False),
-                'manipulation_risk': emotion_result.get('manipulation_risk')
-            }
-            bias_details_payload = { 
-                'detected': bias_result.get('flag', False),
-                'label': bias_result.get('label'), 
-                'confidence': bias_result.get('type_analysis', {}).get('confidence')
+            # --- Stage 3: Determine Primary Bias Type and its Source ---
+            primary_bias_type = "neutral" # Default
+            source_of_primary_bias = "N/A" # Default
+            ml_model_confidence_for_primary = None
+
+            ml_bias_type_analysis = bias_result_ml.get('type_analysis', {})
+            ml_detected_bias_type = ml_bias_type_analysis.get('type')
+            ml_bias_is_specific = ml_detected_bias_type and isinstance(ml_detected_bias_type, str) and \
+                                  ml_detected_bias_type.strip().lower() not in ['neutral', 'no bias', 'analysis_error', '']
+
+            lw_inferred_bias_type = lightweight_nigerian_bias_info.get("inferred_bias_type")
+            lw_bias_is_specific = include_patterns and lw_inferred_bias_type and \
+                                  lw_inferred_bias_type not in ["No specific patterns detected", "Nigerian context detected, specific bias type unclear from patterns"]
+
+            if ml_bias_is_specific:
+                primary_bias_type = ml_detected_bias_type.strip().lower()
+                source_of_primary_bias = "ML Model"
+                ml_model_confidence_for_primary = ml_bias_type_analysis.get('confidence')
+                if lw_bias_is_specific and primary_bias_type == lw_inferred_bias_type.strip().lower(): # Or some other similarity logic
+                    source_of_primary_bias = "ML Model and Pattern Analysis"
+                elif lw_bias_is_specific: # ML is specific, pattern is specific but different
+                     pass # ML takes precedence if both are specific and different
+            elif lw_bias_is_specific:
+                primary_bias_type = lw_inferred_bias_type.strip().lower()
+                source_of_primary_bias = "Pattern Analysis (Nigerian Context)"
+                # ml_model_confidence_for_primary remains None as ML model was not the source of this specific bias
+            elif bias_result_ml.get('flag', False) : # ML flagged bias but type was not specific (e.g. 'unknown')
+                primary_bias_type = bias_result_ml.get('label', "Unknown Bias Detected") # Use the general label
+                source_of_primary_bias = "ML Model"
+                ml_model_confidence_for_primary = ml_bias_type_analysis.get('confidence') # Confidence of 'unknown' if available
+            elif ml_detected_bias_type and ml_detected_bias_type.strip().lower() in ['neutral', 'no bias']:
+                 primary_bias_type = "neutral"
+                 source_of_primary_bias = "ML Model"
+                 ml_model_confidence_for_primary = ml_bias_type_analysis.get('confidence')
+
+
+            # --- Stage 4: Construct the New Response Structure ---
+            tone_analysis = {
+                "primary_tone": emotion_result.get('label'),
+                "is_emotionally_charged": emotion_result.get('is_emotionally_charged', False),
+                "emotional_manipulation_risk": emotion_result.get('manipulation_risk'),
+                "sentiment_label": sentiment_result.get('label'),
+                "sentiment_confidence": sentiment_result.get('confidence')
             }
 
+            bias_analysis_payload = {
+                "primary_bias_type": primary_bias_type,
+                "bias_strength_label": bias_result_ml.get('label'), # General label like "Potentially Biased"
+                "ml_model_confidence": ml_model_confidence_for_primary if source_of_primary_bias != "Pattern Analysis (Nigerian Context)" else None,
+                "source_of_primary_bias": source_of_primary_bias
+            }
+
+            # Clickbait derivation
             np_data = pattern_result.get('nigerian_patterns', {}) if isinstance(pattern_result.get('nigerian_patterns'), dict) else {}
             fn_data = pattern_result.get('fake_news', {}) if isinstance(pattern_result.get('fake_news'), dict) else {}
             vm_data = pattern_result.get('viral_manipulation', {}) if isinstance(pattern_result.get('viral_manipulation'), dict) else {}
-            
             fn_details = fn_data.get('details', {}) if isinstance(fn_data.get('details'), dict) else {}
 
-            pattern_highlights = {
-                'nigerian_context_detected': bool(lightweight_nigerian_bias_info.get('matched_keywords')) or \
-                                           np_data.get('has_triggers', False),
-                'clickbait_detected': np_data.get('has_clickbait', False) or \
-                                    fn_details.get('is_clickbait', False) or \
-                                    vm_data.get('is_potentially_viral', False),
-                'fake_news_risk': fn_details.get('risk_level')
+            is_clickbait = np_data.get('has_clickbait', False) or \
+                           fn_details.get('is_clickbait', False) or \
+                           vm_data.get('is_potentially_viral', False)
+
+            manipulation_analysis = {
+                "is_clickbait": is_clickbait,
+                "engagement_bait_score": vm_data.get('engagement_bait_score'),
+                "sensationalism_score": vm_data.get('sensationalism_score')
+            }
+
+            veracity_signals = {
+                "fake_news_risk_level": fn_details.get('risk_level'),
+                "matched_suspicious_phrases": fn_details.get('matched_phrases', [])
             }
 
             final_result = {
                 'trust_score': trust_result.get('score'),
                 'indicator': trust_result.get('indicator'),
                 'explanation': trust_result.get('explanation'),
-                'tip': trust_result.get('tip'), 
-                'primary_bias_type': primary_bias_type_value,
-                'sentiment_details': sentiment_details,
-                'emotion_details': emotion_details,
-                'bias_details': bias_details_payload,
-                'pattern_highlights': pattern_highlights,
+                'tip': trust_result.get('tip'),
+                'tone_analysis': tone_analysis,
+                'bias_analysis': bias_analysis_payload,
+                'manipulation_analysis': manipulation_analysis,
+                'veracity_signals': veracity_signals,
                 'lightweight_nigerian_bias_assessment': lightweight_nigerian_bias_info if include_patterns and lightweight_nigerian_bias_info else None,
             }
-            
+
             if include_detailed_results:
                 final_result['detailed_sub_analyses'] = {
-                    'sentiment': sentiment_result, 
-                    'emotion': emotion_result,     
-                    'bias': bias_result,           
+                    'sentiment': sentiment_result,
+                    'emotion': emotion_result,
+                    'bias': bias_result_ml, # Full ML bias result
+                    'patterns': pattern_result if include_patterns else None,
+                    'lightweight_nigerian_bias': lightweight_nigerian_bias_info if include_patterns and lightweight_nigerian_bias_info else None,
                 }
-                if include_patterns:
-                    final_result['detailed_sub_analyses']['patterns'] = pattern_result 
-                    if lightweight_nigerian_bias_info:
-                        final_result['detailed_sub_analyses']['lightweight_nigerian_bias'] = lightweight_nigerian_bias_info
-            
+
             return final_result
 
         except Exception as e:
             logger.error(f"Analysis failed due to an unexpected error: {str(e)}", exc_info=True)
             return {
-                'trust_score': None, 'indicator': 'Error', 
+                **default_error_payload,
                 'explanation': [f"An error occurred during analysis: {str(e)}"],
-                'tip': "Analysis failed due to an unexpected error. Please try again later or contact support.",
-                'primary_bias_type': None,
-                'sentiment_details': None, 'emotion_details': None, 'bias_details': None,
-                'pattern_highlights': None, 'lightweight_nigerian_bias_assessment': None,
-                # No 'metadata' field here
+                'tip': "Analysis failed due to an unexpected error. Please try again later or contact support."
             }
 
     def quick_analyze(self, text: str) -> Dict:
@@ -237,7 +246,7 @@ class BiasLensAnalyzer:
                 if not updated_explanation.endswith("."):
                     updated_explanation += "."
                 updated_explanation += f" Specific patterns suggest: {lightweight_bias_info['inferred_bias_type']}."
-            
+
             # Construct the results dictionary
             results = {
                 'score': basic_trust_score_results.get('score'),
@@ -245,7 +254,7 @@ class BiasLensAnalyzer:
                 'explanation': updated_explanation,
                 'tip': random.choice(TrustScoreCalculator.DID_YOU_KNOW_TIPS) # MODIFIED
             }
-            
+
             # Add fields from lightweight_bias_info
             results.update(lightweight_bias_info) # This will add all keys from lightweight_bias_info
 
