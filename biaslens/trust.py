@@ -1,5 +1,358 @@
 import random
+import re
+from datetime import datetime, timedelta
+from urllib.parse import urlparse
 from .patterns import NigerianPatterns, FakeNewsDetector, ViralityDetector
+
+
+class SourceCredibilityScorer:
+    """Nigerian-focused domain reputation and source credibility scoring"""
+    
+    # Nigerian news sources by credibility tier
+    NIGERIAN_SOURCES = {
+        'highly_credible': {
+            'domains': [
+                'punch.ng', 'thisdaylive.com', 'premiumtimesng.com', 'channelstv.com',
+                'guardian.ng', 'vanguardngr.com', 'dailytrust.com', 'tribuneonlineng.com',
+                'businessday.ng', 'leadership.ng', 'thecable.ng', 'saharareporters.com'
+            ],
+            'score_boost': 15,
+            'description': 'Established Nigerian news organizations with editorial standards'
+        },
+        'credible': {
+            'domains': [
+                'legit.ng', 'naij.com', 'pulse.ng', 'nairametrics.com', 'blueprint.ng',
+                'dailypost.ng', 'independent.ng', 'nationonlineng.net', 'newtelegraphng.com'
+            ],
+            'score_boost': 8,
+            'description': 'Recognized Nigerian news sources with good track record'
+        },
+        'mixed': {
+            'domains': [
+                'lindaikejisblog.com', 'informationng.com', 'gistmania.com',
+                'tori.ng', 'yabaleftonline.ng', 'gossipmill.com'
+            ],
+            'score_penalty': 5,
+            'description': 'Entertainment/gossip sources that sometimes share news'
+        },
+        'questionable': {
+            'domains': [
+                'trendingpolitics.ng', 'nairaland.com', 'liberianobserver.com',
+                'pulsenigeria247.com', 'nationalhelm.co'
+            ],
+            'score_penalty': 15,
+            'description': 'Sources with history of unverified or biased content'
+        },
+        'high_risk': {
+            'domains': [
+                'newsrescue.com', 'elombah.com', 'ukpakareports.com',
+                'pointblanknews.com', 'ripples.ng'
+            ],
+            'score_penalty': 25,
+            'description': 'Sources frequently associated with misinformation'
+        }
+    }
+    
+    INTERNATIONAL_CREDIBLE = {
+        'domains': [
+            'bbc.com', 'cnn.com', 'reuters.com', 'apnews.com', 'aljazeera.com',
+            'france24.com', 'dw.com', 'voaafrica.com', 'africanews.com'
+        ],
+        'score_boost': 12,
+        'description': 'International news sources with African coverage'
+    }
+    
+    SOCIAL_MEDIA_PENALTIES = {
+        'twitter.com': -8,
+        'facebook.com': -10,
+        'instagram.com': -12,
+        'whatsapp': -15,  # For WhatsApp forwards
+        'telegram': -12,
+        'tiktok.com': -18
+    }
+
+    @classmethod
+    def score_source(cls, text, url=None):
+        """Score source credibility based on domain and content patterns"""
+        score_adjustment = 0
+        credibility_info = {
+            'source_type': 'unknown',
+            'credibility_tier': 'unverified',
+            'explanation': '',
+            'domain': None
+        }
+        
+        # Extract domain from URL if provided
+        domain = None
+        if url:
+            try:
+                parsed = urlparse(url.lower())
+                domain = parsed.netloc.replace('www.', '')
+                credibility_info['domain'] = domain
+            except:
+                pass
+        
+        # Check for domain mentions in text if no URL provided
+        if not domain:
+            domain_patterns = r'(?:https?://)?(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
+            matches = re.findall(domain_patterns, text.lower())
+            if matches:
+                domain = matches[0].replace('www.', '')
+                credibility_info['domain'] = domain
+        
+        if domain:
+            # Check Nigerian sources
+            for tier, data in cls.NIGERIAN_SOURCES.items():
+                if domain in data['domains']:
+                    if 'score_boost' in data:
+                        score_adjustment = data['score_boost']
+                        credibility_info['source_type'] = 'nigerian_media'
+                        credibility_info['credibility_tier'] = tier
+                        credibility_info['explanation'] = f"Source recognized as {data['description'].lower()}"
+                    else:
+                        score_adjustment = -data['score_penalty']
+                        credibility_info['source_type'] = 'nigerian_media'
+                        credibility_info['credibility_tier'] = tier
+                        credibility_info['explanation'] = f"Source flagged as {data['description'].lower()}"
+                    break
+            
+            # Check international sources
+            if score_adjustment == 0 and domain in cls.INTERNATIONAL_CREDIBLE['domains']:
+                score_adjustment = cls.INTERNATIONAL_CREDIBLE['score_boost']
+                credibility_info['source_type'] = 'international_media'
+                credibility_info['credibility_tier'] = 'credible'
+                credibility_info['explanation'] = cls.INTERNATIONAL_CREDIBLE['description']
+            
+            # Check social media penalties
+            for social_domain, penalty in cls.SOCIAL_MEDIA_PENALTIES.items():
+                if social_domain in domain:
+                    score_adjustment = penalty
+                    credibility_info['source_type'] = 'social_media'
+                    credibility_info['credibility_tier'] = 'unverified'
+                    credibility_info['explanation'] = f"Content from social media platform - higher verification needed"
+                    break
+        
+        # Check for anonymous/unattributed content patterns
+        anonymous_patterns = [
+            r'\b(?:anonymous|unnamed) source\b',
+            r'\b(?:according to|sources say)\b',
+            r'\breport(?:s|ed)?\s+(?:say|claim|suggest)\b',
+            r'\b(?:insider|source close to)\b'
+        ]
+        
+        anonymous_count = sum(1 for pattern in anonymous_patterns 
+                            if re.search(pattern, text.lower()))
+        
+        if anonymous_count >= 2:
+            score_adjustment -= 8
+            credibility_info['explanation'] += " Multiple anonymous sources detected."
+        
+        return score_adjustment, credibility_info
+
+
+class RecencyFactorAnalyzer:
+    """Detect and penalize old news being reshared as current events"""
+    
+    # Common date patterns in news content
+    DATE_PATTERNS = [
+        r'\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{4}\b',
+        r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b',
+        r'\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b',
+        r'\b(?:yesterday|today|last week|last month|last year)\b',
+        r'\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}\b'
+    ]
+    
+    # Outdated event indicators
+    OUTDATED_INDICATORS = [
+        r'\b(?:breaking|just in|urgent|alert)\b.*\b(?:2019|2020|2021|2022|2023)\b',
+        r'\b(?:covid|coronavirus|lockdown)\b.*\b(?:just happened|breaking)\b',
+        r'\b(?:election|vote)\b.*\b(?:2019|2023)\b.*\b(?:now|today|breaking)\b'
+    ]
+    
+    # Time-sensitive terms that should be recent
+    TIME_SENSITIVE_TERMS = [
+        'breaking', 'just in', 'urgent', 'alert', 'developing', 'live',
+        'happening now', 'minutes ago', 'hours ago', 'this morning'
+    ]
+
+    @classmethod
+    def analyze_recency(cls, text):
+        """Analyze content for recency manipulation indicators"""
+        penalty = 0
+        recency_info = {
+            'is_potentially_outdated': False,
+            'outdated_indicators': [],
+            'detected_dates': [],
+            'time_sensitive_claims': [],
+            'explanation': ''
+        }
+        
+        text_lower = text.lower()
+        
+        # Extract dates from content
+        detected_dates = []
+        for pattern in cls.DATE_PATTERNS:
+            matches = re.findall(pattern, text_lower)
+            detected_dates.extend(matches)
+        
+        recency_info['detected_dates'] = detected_dates[:3]  # Limit to first 3
+        
+        # Check for outdated event indicators
+        outdated_matches = []
+        for pattern in cls.OUTDATED_INDICATORS:
+            matches = re.findall(pattern, text_lower)
+            outdated_matches.extend(matches)
+        
+        if outdated_matches:
+            penalty += 20
+            recency_info['is_potentially_outdated'] = True
+            recency_info['outdated_indicators'] = outdated_matches[:2]
+            recency_info['explanation'] = "Content appears to present old events as current news."
+        
+        # Check for time-sensitive claims without recent context
+        time_sensitive_matches = []
+        for term in cls.TIME_SENSITIVE_TERMS:
+            if term in text_lower:
+                time_sensitive_matches.append(term)
+        
+        recency_info['time_sensitive_claims'] = time_sensitive_matches[:3]
+        
+        # If time-sensitive terms are present but no recent dates, it's suspicious
+        if time_sensitive_matches and not any(['2024', '2025'] in str(date) for date in detected_dates):
+            # Check if there are any old dates (2019-2023)
+            old_date_indicators = ['2019', '2020', '2021', '2022', '2023']
+            has_old_dates = any(year in text_lower for year in old_date_indicators)
+            
+            if has_old_dates:
+                penalty += 15
+                recency_info['is_potentially_outdated'] = True
+                recency_info['explanation'] += " Time-sensitive language used with old dates."
+        
+        # Check for recycled content patterns
+        recycled_patterns = [
+            r'\b(?:remember when|flashback|throwback)\b.*\b(?:breaking|urgent)\b',
+            r'\b(?:this happened|this was when)\b.*\b(?:just in|alert)\b'
+        ]
+        
+        for pattern in recycled_patterns:
+            if re.search(pattern, text_lower):
+                penalty += 12
+                recency_info['is_potentially_outdated'] = True
+                recency_info['explanation'] += " Content appears to recycle old events as current."
+                break
+        
+        return penalty, recency_info
+
+
+class VerificationBadgeSystem:
+    """Integration with fact-checking organizations and verification systems"""
+    
+    FACT_CHECKING_ORGS = {
+        'africa_check': {
+            'name': 'Africa Check',
+            'url': 'africacheck.org',
+            'focus': 'African fact-checking',
+            'credibility': 'high'
+        },
+        'dubawa': {
+            'name': 'Dubawa',
+            'url': 'dubawa.org',
+            'focus': 'Nigerian fact-checking',
+            'credibility': 'high'
+        },
+        'reuters_fact_check': {
+            'name': 'Reuters Fact Check',
+            'url': 'reuters.com/fact-check',
+            'focus': 'Global fact-checking',
+            'credibility': 'high'
+        },
+        'snopes': {
+            'name': 'Snopes',
+            'url': 'snopes.com',
+            'focus': 'Global fact-checking',
+            'credibility': 'high'
+        }
+    }
+    
+    # Fact-check result indicators
+    FACT_CHECK_INDICATORS = {
+        'verified': {
+            'patterns': [r'\b(?:verified|confirmed|fact.checked|authentic)\b'],
+            'score_boost': 20,
+            'badge': '✅ Verified'
+        },
+        'partially_true': {
+            'patterns': [r'\b(?:partially true|mixed|some truth)\b'],
+            'score_boost': 5,
+            'badge': '⚠️ Partially Verified'
+        },
+        'disputed': {
+            'patterns': [r'\b(?:disputed|contested|unverified|unconfirmed)\b'],
+            'score_penalty': 10,
+            'badge': '❓ Disputed'
+        },
+        'false': {
+            'patterns': [r'\b(?:false|fake|hoax|debunked|misleading)\b'],
+            'score_penalty': 25,
+            'badge': '❌ False'
+        }
+    }
+
+    @classmethod
+    def check_verification_status(cls, text, url=None):
+        """Check for verification badges and fact-check references"""
+        verification_info = {
+            'has_fact_check_reference': False,
+            'fact_check_org': None,
+            'verification_status': 'unverified',
+            'badge': None,
+            'explanation': '',
+            'score_adjustment': 0
+        }
+        
+        text_lower = text.lower()
+        
+        # Check for fact-checking organization references
+        for org_key, org_data in cls.FACT_CHECKING_ORGS.items():
+            if org_data['url'] in text_lower or org_data['name'].lower() in text_lower:
+                verification_info['has_fact_check_reference'] = True
+                verification_info['fact_check_org'] = org_data['name']
+                verification_info['score_adjustment'] += 10
+                verification_info['explanation'] = f"References {org_data['name']} fact-checking."
+                break
+        
+        # Check for fact-check result indicators
+        for status, data in cls.FACT_CHECK_INDICATORS.items():
+            for pattern in data['patterns']:
+                if re.search(pattern, text_lower):
+                    verification_info['verification_status'] = status
+                    verification_info['badge'] = data['badge']
+                    
+                    if 'score_boost' in data:
+                        verification_info['score_adjustment'] += data['score_boost']
+                    else:
+                        verification_info['score_adjustment'] -= data['score_penalty']
+                    
+                    verification_info['explanation'] += f" Content marked as {status.replace('_', ' ')}."
+                    break
+            
+            if verification_info['verification_status'] != 'unverified':
+                break
+        
+        # Check for verification bypass patterns (red flags)
+        bypass_patterns = [
+            r'\b(?:they don\'t want you to know|mainstream media won\'t tell you)\b',
+            r'\b(?:before it gets deleted|share before removal)\b',
+            r'\b(?:fact.checkers are lying|ignore fact.checkers)\b'
+        ]
+        
+        for pattern in bypass_patterns:
+            if re.search(pattern, text_lower):
+                verification_info['score_adjustment'] -= 15
+                verification_info['explanation'] += " Contains anti-verification messaging."
+                break
+        
+        return verification_info
 
 
 class TrustScoreCalculator:
@@ -10,7 +363,7 @@ class TrustScoreCalculator:
         "Check the publication date. Old news can be re-shared out of context to mislead.",
         "Examine the 'About Us' page of a source to understand its mission, ownership, and potential biases.",
         "Distinguish between news reporting, opinion pieces, and sponsored content. Each has a different purpose.",
-        "Cross-reference claims with fact-checking websites like Snopes, PolitiFact, or Africa Check.",
+        "Cross-reference claims with fact-checking websites like Africa Check, Dubawa, or Snopes.",
         "Be skeptical of content that claims to have 'secret' or 'exclusive' information without evidence.",
         "Consider the images and videos used. Are they original, or are they altered or taken from unrelated events?",
         "Understand that all sources can have some level of bias. Seek diverse perspectives to get a fuller picture.",
@@ -60,9 +413,9 @@ class TrustScoreCalculator:
 
     @staticmethod
     def calculate(bias_score, emotion_score, sentiment_label, text,
-                  emotion_data=None, sentiment_data=None, bias_data=None):
+                  emotion_data=None, sentiment_data=None, bias_data=None, url=None):
         """
-        Enhanced trust score calculation using all available analysis data
+        Enhanced trust score calculation with source credibility, recency, and verification
 
         Args:
             bias_score: Legacy bias score (for backward compatibility)
@@ -72,6 +425,7 @@ class TrustScoreCalculator:
             emotion_data: Full emotion analysis dict (optional)
             sentiment_data: Full sentiment analysis dict (optional)
             bias_data: Full bias analysis dict (optional)
+            url: Source URL for credibility analysis (optional)
         """
 
         # Initialize score and tracking
@@ -79,6 +433,37 @@ class TrustScoreCalculator:
         explanation = []
         risk_factors = []
 
+        # === NEW ENHANCED FEATURES ===
+        
+        # 1. Source Credibility Analysis
+        source_adjustment, credibility_info = SourceCredibilityScorer.score_source(text, url)
+        score += source_adjustment
+        
+        if credibility_info['credibility_tier'] != 'unverified':
+            explanation.append(f"Source credibility: {credibility_info['explanation']}")
+            if source_adjustment > 0:
+                risk_factors.append(f"credible_source_{credibility_info['credibility_tier']}")
+            else:
+                risk_factors.append(f"questionable_source_{credibility_info['credibility_tier']}")
+        
+        # 2. Recency Factor Analysis
+        recency_penalty, recency_info = RecencyFactorAnalyzer.analyze_recency(text)
+        score -= recency_penalty
+        
+        if recency_info['is_potentially_outdated']:
+            explanation.append(recency_info['explanation'])
+            risk_factors.append("outdated_content")
+        
+        # 3. Verification Badge System
+        verification_info = VerificationBadgeSystem.check_verification_status(text, url)
+        score += verification_info['score_adjustment']
+        
+        if verification_info['has_fact_check_reference']:
+            explanation.append(verification_info['explanation'])
+            risk_factors.append(f"fact_check_{verification_info['verification_status']}")
+
+        # === EXISTING ANALYSIS (Enhanced) ===
+        
         # Pattern Analysis
         nigerian_analysis = NigerianPatterns.analyze_patterns(text)
         fake_detected, fake_details = FakeNewsDetector.detect(text)
@@ -104,7 +489,6 @@ class TrustScoreCalculator:
                     explanation.append(f"Dominant bias type identified: {detected_bias_type.replace('_', ' ').title()}.")
                 elif detected_bias_type == 'neutral' or detected_bias_type == 'no bias':
                     explanation.append("Bias type analysis indicates neutrality.")
-                # If 'analysis_error' or None, no specific type explanation is added for type
         else:
             # Fallback to legacy scoring
             if bias_score >= 0.8:
@@ -226,13 +610,19 @@ class TrustScoreCalculator:
                 risk_factors.append("mild_viral_manipulation")
 
         # === FINAL ADJUSTMENTS ===
-        # Bonus for neutral, well-balanced content
-        if (len(risk_factors) == 0 and
-                sentiment_label == 'neutral' and # This uses legacy sentiment_label
-                (not emotion_data or emotion_data.get('manipulation_risk', 'minimal') == 'minimal' and not emotion_data.get('is_emotionally_charged', False)) and # Check new emotion_data if available
-                (not bias_data or not bias_data.get('flag', False))): # Check new bias_data if available
-            score += 5
-            explanation.append("Content appears balanced and factual.")
+        # Enhanced bonus for verified, credible, recent content
+        if (len([rf for rf in risk_factors if not rf.startswith('credible_source')]) == 0 and
+                sentiment_label == 'neutral' and
+                (not emotion_data or emotion_data.get('manipulation_risk', 'minimal') == 'minimal' and not emotion_data.get('is_emotionally_charged', False)) and
+                (not bias_data or not bias_data.get('flag', False)) and
+                credibility_info['credibility_tier'] in ['highly_credible', 'credible'] and
+                not recency_info['is_potentially_outdated']):
+            score += 10
+            explanation.append("Content appears balanced, factual, and from credible source.")
+
+        # Verification badge bonus
+        if verification_info['badge']:
+            explanation.append(f"Verification status: {verification_info['badge']}")
 
         # Ensure score stays within bounds
         score = max(0, min(score, 100))
@@ -251,6 +641,9 @@ class TrustScoreCalculator:
             'trust_level': trust_level,
             'risk_factors': risk_factors,
             'summary': summary,
+            'source_credibility': credibility_info,
+            'recency_analysis': recency_info,
+            'verification_status': verification_info,
             'pattern_analysis': {
                 'nigerian_patterns': nigerian_analysis,
                 'fake_news_risk': fake_details if fake_detected else None,
