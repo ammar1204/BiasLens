@@ -170,6 +170,86 @@ interface DeepAnalysisResult {
 type AnalysisResultType = QuickAnalysisResult | DeepAnalysisResult | null;
 type AnalysisMode = "quick" | "deep" | null;
 
+// readableKeyMap should be defined outside the component if it doesn't need access to component's state/props
+// or inside if it does, or passed as a prop. For this case, outside is fine.
+const readableKeyMap: Record<string, string> = {
+  // Common keys from various analysis sections
+  is_biased: "Is Biased:",
+  bias_level: "Bias Level:",
+  bias_strength_label: "Bias Strength:",
+  primary_bias_type: "Primary Bias Type:",
+  ml_model_confidence: "ML Model Confidence:",
+  source_of_primary_bias: "Source of Primary Bias:",
+  is_clickbait: "Clickbait Detected:",
+  engagement_bait_score: "Engagement Bait Score:",
+  sensationalism_score: "Sensationalism Score:",
+  fake_news_risk_level: "Fake News Risk Level:",
+  matched_suspicious_phrases: "Matched Suspicious Phrases:",
+  primary_tone: "Primary Tone:",
+  is_emotionally_charged: "Emotionally Charged:",
+  emotional_manipulation_risk: "Emotional Manipulation Risk:",
+  sentiment_label: "Sentiment:",
+  sentiment_confidence: "Sentiment Confidence:",
+  inferred_bias_type: "Inferred Bias Type (Pattern-based):",
+  bias_category: "Bias Category (Pattern-based):",
+  bias_target: "Bias Target (Pattern-based):",
+  matched_keywords: "Matched Keywords (Pattern-based):",
+  has_triggers: "Has Triggers:",
+  trigger_matches: "Trigger Matches:",
+  trigger_score: "Trigger Score:",
+  clickbait_matches: "Clickbait Matches:",
+  clickbait_score: "Clickbait Score:",
+  total_flags: "Total Flags:",
+  fake_matches: "Matched Fake News Phrases:", // For FakeNewsDetail
+  credibility_flags: "Credibility Red Flags:",
+  fake_score: "Fake Score:",
+  credibility_score: "Credibility Score:",
+  has_viral_patterns: "Has Viral Patterns:",
+  viral_matches: "Viral Matches:",
+  viral_score: "Viral Score:",
+  manipulation_level: "Manipulation Level:",
+  // Keys from BiasDetection objects within nigerian_detections
+  term: "Term:",
+  category: "Category:",
+  // bias_level: "Bias Level:", // Already defined
+  confidence: "Confidence:",
+  context: "Context:",
+  direction: "Direction:",
+  explanation: "Explanation:",
+  // Keys from specific_detections (which are BiasDetection like)
+  // term, category, bias_level, confidence, direction, explanation, context are covered
+  // Keys from type_analysis in BiasDetail
+  type: "Type:", // Generic, might need context if used elsewhere for different things
+  // confidence: "Confidence:", // Already defined
+  nigerian_context: "Nigerian Context Specific:",
+  // Keys from overall_bias
+  // is_biased, confidence, level (covered by bias_level)
+  // Keys from bias_details (NewBiasLensAnalyzer)
+  // type, type_confidence, nigerian_context, specific_detections (handled by deeper rendering later)
+  // Keys from clickbait (NewBiasLensAnalyzer)
+  // is_clickbait, confidence, level, detected_patterns, explanation
+  detected_patterns: "Detected Clickbait Patterns:",
+  // Keys from technical_details (NewBiasLensAnalyzer)
+  base_model_score: "Base Model Score:",
+  // explanation: "Technical Explanation:", // Can conflict with other 'explanation' keys
+  error: "Error:",
+  // For detailed sub-analyses raw fields
+  flag: "Flagged:",
+  detected: "Detected:",
+  all_scores: "All Sentiment Scores:",
+  headline_comparison: "Headline Comparison:",
+  trigger_details: "Trigger Details:",
+  clickbait_details: "Clickbait Details:",
+  details: "Details:", // Generic for FakeNewsDetail.details
+  level: "Level:", // Generic, e.g. for clickbait level from NewBiasLensAnalyzer
+  specific_detections: "Specific Detections:",
+  raw_new_analyzer_result: "Raw Bias Analyzer Result:", // From _analyze_bias_safe
+  // Keys from LightweightNigerianBiasAssessmentModel when rendered in full
+  count: "Count of Nigerian Detections:", // New key from recent analyzer.py change
+  categories_present: "Categories Present (Nigerian):", // New key from recent analyzer.py change
+  has_specific_nigerian_bias: "Has Specific Nigerian Bias (ML):" // New key from recent analyzer.py change
+};
+
 export default function AnalyzePage() {
   const { user, loading: authLoading } = useAuth()
   const [text, setText] = useState("")
@@ -179,6 +259,81 @@ export default function AnalyzePage() {
   const [apiError, setApiError] = useState<string | null>(null)
   const { toast } = useToast()
   const router = useRouter()
+
+  // Helper function to render individual field values based on their type
+  // This function is defined inside AnalyzePage to have access to readableKeyMap if it were state or prop based.
+  // Since readableKeyMap is global const in this file, renderFieldValue could also be global.
+  // Keeping it here for now as it's closely tied to this component's rendering logic.
+  const renderFieldValue = (originalKey: string, value: any, isNested: boolean = false): React.ReactNode => {
+    if (value === null || value === undefined) return null;
+    // Avoid rendering the 'error' key if it's already handled or if its value suggests no error.
+    // This check might need refinement based on how 'error' fields are structured and used.
+    if (originalKey === 'error' && (typeof value === 'string' && value.toLowerCase().includes("no error") || !value )) return null;
+
+
+    const displayKey = readableKeyMap[originalKey] || originalKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    const displayKeyComponent = <span className="font-semibold">{displayKey}</span>;
+
+    const baseKeyClass = isNested ? "text-xs" : "text-sm";
+
+    if (typeof value === 'boolean') {
+      return <div key={originalKey} className={baseKeyClass}>{displayKeyComponent} {value ? "Yes" : "No"}</div>;
+    }
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        return <div key={originalKey} className={baseKeyClass}>{displayKeyComponent} N/A</div>;
+      }
+      if (value.every(item => typeof item === 'string')) {
+        return (
+          <div key={originalKey} className={baseKeyClass}>
+            {displayKeyComponent}
+            <ul className="list-disc list-inside pl-4 mt-1 space-y-0.5">
+              {value.map((item, index) => <li key={index}>{item}</li>)}
+            </ul>
+          </div>
+        );
+      } else if (value.every(item => typeof item === 'object' && item !== null)) {
+        return (
+          <div key={originalKey} className={baseKeyClass}>
+            {displayKeyComponent}
+            <div className={`pl-2 mt-1 space-y-2 ${isNested ? "border-l-2 border-slate-200 dark:border-slate-700 ml-2 pl-2" : ""}`}>
+              {value.map((item, index) => (
+                <div key={index} className={`p-2 rounded ${isNested ? "bg-muted/30 dark:bg-muted/80" : "bg-muted/50 dark:bg-muted/70 border dark:border-slate-700"} `}>
+                  <div className="space-y-1">
+                     {Object.entries(item).map(([objKey, objValue]) => renderFieldValue(objKey, objValue, true))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      } else { // Fallback for mixed arrays or other non-string, non-object arrays
+        return <div key={originalKey} className={`${baseKeyClass} break-all`}>{displayKeyComponent} <pre className="whitespace-pre-wrap text-xs bg-muted p-2 rounded mt-1">{JSON.stringify(value, null, 2)}</pre></div>;
+      }
+    }
+    if (typeof value === 'object' && value !== null) {
+      if (originalKey === 'raw_new_analyzer_result' && !isNested) {
+        return <div key={originalKey} className={baseKeyClass}>{displayKeyComponent} <span className="text-muted-foreground text-xs">(Full raw data from the new bias analyzer - hidden for brevity)</span></div>;
+      }
+      const objEntries = Object.entries(value).filter(([_, val]) => val !== null && val !== undefined);
+      if (objEntries.length === 0) return <div key={originalKey} className={baseKeyClass}>{displayKeyComponent} Empty object</div>;
+
+      return (
+        <div key={originalKey} className={baseKeyClass}>
+          {displayKeyComponent}
+          <div className={`pl-2 mt-1 space-y-1 ${isNested ? "border-l-2 border-slate-200 dark:border-slate-700 ml-2 pl-2" : ""}`}>
+            {objEntries.map(([objKey, objValue]) => renderFieldValue(objKey, objValue, true))}
+          </div>
+        </div>
+      );
+    }
+    // Default for strings, numbers
+    // Add specific check for error strings to style them
+     if (originalKey === 'error' && typeof value === 'string') {
+        return <div key={originalKey} className={`${baseKeyClass} text-red-500 dark:text-red-400`}>{displayKeyComponent} {String(value)}</div>;
+    }
+    return <div key={originalKey} className={baseKeyClass}>{displayKeyComponent} {String(value)}</div>;
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -252,20 +407,8 @@ export default function AnalyzePage() {
     return (
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2 text-base">{icon || <Info />} {title}</CardTitle>{cardDescription && <CardDescription>{cardDescription}</CardDescription>}</CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {validEntries.map(([key, value]) => {
-            if (key === 'error' && value) return null;
-            if (typeof value === 'boolean') { return <div key={key}><span className="font-semibold capitalize">{key.replace(/_/g, ' ')}:</span> {value ? "Yes" : "No"}</div>; }
-            if (Array.isArray(value)) {
-              return <div key={key}><span className="font-semibold capitalize">{key.replace(/_/g, ' ')}:</span> {value.length > 0 ? value.join(', ') : 'N/A'}</div>;
-            }
-            if (typeof value === 'object' && value !== null) {
-              const contentToPrint = JSON.stringify(value, null, 2);
-              if (contentToPrint === '{}' || contentToPrint === '[]') return null;
-              return <div key={key} className="break-all"><span className="font-semibold capitalize">{key.replace(/_/g, ' ')}:</span> <pre className="whitespace-pre-wrap text-xs bg-muted p-2 rounded mt-1">{contentToPrint}</pre></div>;
-            }
-            return <div key={key}><span className="font-semibold capitalize">{key.replace(/_/g, ' ')}:</span> {String(value)}</div>;
-          })}
+        <CardContent className="space-y-2"> {/* Removed text-sm from here, handled by renderFieldValue */}
+          {validEntries.map(([key, value]) => renderFieldValue(key, value, false))}
         </CardContent>
       </Card>
     );
