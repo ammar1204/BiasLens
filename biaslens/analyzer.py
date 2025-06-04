@@ -1,6 +1,7 @@
 from .sentiment import SentimentAnalyzer
 from .emotion import EmotionClassifier
-from .bias import BiasDetector, BiasTypeClassifier, NigerianBiasEnhancer # Added NigerianBiasEnhancer
+# from .bias import BiasDetector, BiasTypeClassifier, NigerianBiasEnhancer # Added NigerianBiasEnhancer
+from .bias import BiasLensAnalyzer as NewBiasLensAnalyzer # New import
 from .patterns import NigerianPatterns, FakeNewsDetector, ViralityDetector
 from .trust import TrustScoreCalculator
 import time
@@ -21,9 +22,10 @@ class BiasLensAnalyzer:
         """Initialize all analysis components with lazy loading"""
         self._sentiment_analyzer = None
         self._emotion_classifier = None
-        self._bias_detector = None
-        self._bias_type_classifier = None
-        self._nigerian_bias_enhancer = NigerianBiasEnhancer() # Added instance
+        # self._bias_detector = None
+        # self._bias_type_classifier = None
+        # self._nigerian_bias_enhancer = NigerianBiasEnhancer() # Added instance
+        self._new_bias_analyzer = None # New analyzer property
 
         # Track initialization status for performance monitoring
         self._initialized_components = set()
@@ -46,23 +48,32 @@ class BiasLensAnalyzer:
             self._initialized_components.add('emotion')
         return self._emotion_classifier
 
-    @property
-    def bias_detector(self):
-        """Lazy load bias detector"""
-        if self._bias_detector is None:
-            logger.info("Initializing BiasDetector...")
-            self._bias_detector = BiasDetector()
-            self._initialized_components.add('bias_detection')
-        return self._bias_detector
+    # @property
+    # def bias_detector(self):
+    #     """Lazy load bias detector"""
+    #     if self._bias_detector is None:
+    #         logger.info("Initializing BiasDetector...")
+    #         self._bias_detector = BiasDetector()
+    #         self._initialized_components.add('bias_detection')
+    #     return self._bias_detector
+
+    # @property
+    # def bias_type_classifier(self):
+    #     """Lazy load bias type classifier"""
+    #     if self._bias_type_classifier is None:
+    #         logger.info("Initializing BiasTypeClassifier...")
+    #         self._bias_type_classifier = BiasTypeClassifier()
+    #         self._initialized_components.add('bias_classification')
+    #     return self._bias_type_classifier
 
     @property
-    def bias_type_classifier(self):
-        """Lazy load bias type classifier"""
-        if self._bias_type_classifier is None:
-            logger.info("Initializing BiasTypeClassifier...")
-            self._bias_type_classifier = BiasTypeClassifier()
-            self._initialized_components.add('bias_classification')
-        return self._bias_type_classifier
+    def new_bias_analyzer(self):
+        """Lazy load NewBiasLensAnalyzer"""
+        if self._new_bias_analyzer is None:
+            logger.info("Initializing NewBiasLensAnalyzer...")
+            self._new_bias_analyzer = NewBiasLensAnalyzer()
+            self._initialized_components.add('new_bias_analysis')
+        return self._new_bias_analyzer
 
     def analyze(self, text: str, include_patterns: bool = True,
                 headline: Optional[str] = None, include_detailed_results: bool = False) -> Dict:
@@ -92,10 +103,20 @@ class BiasLensAnalyzer:
             bias_result_ml = self._analyze_bias_safe(text) # ML-based bias detection
 
             pattern_result = {}
-            lightweight_nigerian_bias_info = {}
+            pattern_result = {}
+            lightweight_nigerian_bias_info = {} # Initialize here
             if include_patterns:
                 pattern_result = self._analyze_patterns_safe(text)
-                lightweight_nigerian_bias_info = self._nigerian_bias_enhancer.get_lightweight_bias_assessment(text)
+                # Updated lightweight_nigerian_bias_info construction
+                nd = bias_result_ml.get('nigerian_detections', [])
+                lightweight_nigerian_bias_info = {
+                    "count": len(nd),
+                    "inferred_bias_type": nd[0]['category'] if nd and isinstance(nd, list) and len(nd) > 0 and isinstance(nd[0], dict) else "No specific patterns detected",
+                    "categories_present": list(set(d.get('category') for d in nd if isinstance(d, dict) and d.get('category'))),
+                    "matched_keywords": list(set(d.get('term') for d in nd if isinstance(d, dict) and d.get('term')))[:3],
+                    "has_specific_nigerian_bias": bool(nd)
+                }
+
 
             # --- Stage 2: Calculate Trust Score (depends on some of the above) ---
             trust_result = self._calculate_trust_score_safe(
@@ -149,7 +170,7 @@ class BiasLensAnalyzer:
 
             bias_analysis_payload = {
                 "primary_bias_type": primary_bias_type,
-                "bias_strength_label": bias_result_ml.get('label'), # General label like "Potentially Biased"
+                "bias_strength_label": bias_result_ml.get('bias_level'), # Changed from get('label') to get('bias_level')
                 "ml_model_confidence": ml_model_confidence_for_primary if source_of_primary_bias != "Pattern Analysis (Nigerian Context)" else None,
                 "source_of_primary_bias": source_of_primary_bias
             }
@@ -228,7 +249,15 @@ class BiasLensAnalyzer:
             sentiment_result = self._analyze_sentiment_safe(text)
             nigerian_patterns = NigerianPatterns.analyze_patterns(text)
             fake_detected, fake_details = FakeNewsDetector.detect(text) # fake_details can be a dict
-            lightweight_bias_info = self._nigerian_bias_enhancer.get_lightweight_bias_assessment(text)
+
+            # Updated lightweight_bias_info for quick_analyze
+            nigerian_patterns_results = NigerianPatterns.analyze_patterns(text) # Already called, reuse
+            lightweight_bias_info = {
+                "inferred_bias_type": "Pattern-based assessment" if nigerian_patterns_results.get('has_triggers') else "No specific patterns detected",
+                "bias_category": None,
+                "bias_target": None,
+                "matched_keywords": nigerian_patterns_results.get('trigger_matches', [])[:3]
+            }
 
             basic_trust_score_results = self._calculate_basic_trust_score(
                 sentiment_result, nigerian_patterns, fake_detected, fake_details
@@ -401,29 +430,51 @@ class BiasLensAnalyzer:
             }
 
     def _analyze_bias_safe(self, text: str) -> Dict:
-        """Bias analysis with error handling"""
+        """Bias analysis with error handling using the new NewBiasLensAnalyzer"""
         try:
-            # Bias detection
-            bias_flag, bias_label = self.bias_detector.detect(text)
+            result = self.new_bias_analyzer.analyze(text)
 
-            # Bias type classification
-            bias_type_result = self.bias_type_classifier.predict(text)
+            # Adapt the new structure to the expected old structure for now
+            # Expected: {'flag', 'label', 'type_analysis', 'confidence', 'bias_level', 'nigerian_detections', 'detected'}
+
+            overall_bias = result.get('overall_bias', {})
+            bias_details = result.get('bias_details', {})
+
+            flag = overall_bias.get('is_biased', False)
+            level = overall_bias.get('level') # 'high', 'medium', 'low'
+
+            label = f"Potentially Biased ({level})" if flag and level else \
+                    ("No Bias Detected" if not flag else "Bias Analysis Inconclusive")
+
+            type_analysis = {
+                'type': bias_details.get('type'),
+                'confidence': bias_details.get('type_confidence'),
+                'nigerian_context': bias_details.get('nigerian_context')
+            }
 
             return {
-                'flag': bias_flag,
-                'label': bias_label,
-                'type_analysis': bias_type_result,
-                'detected': bias_flag
+                'flag': flag,
+                'label': label,
+                'type_analysis': type_analysis,
+                'confidence': overall_bias.get('confidence'),
+                'bias_level': level,
+                'nigerian_detections': bias_details.get('specific_detections', []),
+                'detected': flag, # a.k.a. is_biased
+                # Store the full new result as well, for potential future use or if other parts need more details
+                'raw_new_analyzer_result': result
             }
 
         except Exception as e:
-            logger.error(f"Bias analysis failed: {str(e)}")
+            logger.error(f"New bias analysis failed: {str(e)}", exc_info=True)
             return {
                 'flag': False,
-                'label': f"Bias analysis failed: {str(e)}",
-                'type_analysis': {'type': 'analysis_error', 'confidence': 0},
+                'label': "Bias analysis failed",
+                'type_analysis': {'type': 'analysis_error', 'confidence': 0.0},
+                'confidence': 0.0,
+                'bias_level': 'unknown',
+                'nigerian_detections': [],
                 'detected': False,
-                'error': str(e)
+                'error': f"New bias analysis failed: {str(e)}"
             }
 
     def _analyze_patterns_safe(self, text: str) -> Dict:
