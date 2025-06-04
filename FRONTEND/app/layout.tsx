@@ -10,7 +10,7 @@ import { Toaster } from "@/components/ui/toaster"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "BiaLens - AI-Powered Bias Detection",
+  title: "BiasLens - AI-Powered Bias Detection",
   description: "Detect bias, sentiment, and misinformation in news, blogs, and social posts with AI-powered analysis.",
     
 }

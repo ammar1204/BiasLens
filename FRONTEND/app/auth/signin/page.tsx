@@ -50,7 +50,7 @@ export default function SignInPage() {
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             {/* <Brain className="h-12 w-12 text-primary" /> */}
-             <img src="/image-removebg-preview (5).png" alt="BiaLens Logo" className="h-14 w-50" />
+            <img src="/bias (5).png" alt="BiaLens Logo" className="h-14 w-50" />
           </div>
           <CardTitle className="text-2xl">Welcome Back</CardTitle>
           <CardDescription>Sign in to your BiaLens account to continue analyzing text</CardDescription>
