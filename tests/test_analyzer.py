@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from biaslens.analyzer import BiasLensAnalyzer, analyze, quick_analyze
+from biaslens.analyzer import BiasLensAnalyzer, analyse
 # Removed: from biaslens.bias import NigerianBiasEnhancer
 from biaslens.trust import TrustScoreCalculator
 
@@ -70,22 +70,9 @@ class TestBiasLensAnalyzer(unittest.TestCase):
         self.patcher_analyzer_trust_calc.stop()
         # Removed: self.patcher_analyzer_overall_assessment.stop() # This was not started in setUp in this version
 
-    def test_quick_analyze_empty_text_core_solution_structure(self):
-        results = quick_analyze("")
-        self.assertEqual(results.get('indicator'), 'Error')
-        self.assertEqual(results.get('explanation'), "Empty text provided.")
-        self.assertEqual(results.get('tip'), "No text was provided. Please input text for analysis. For a detailed breakdown of potential biases and manipulation, use the full analyze() function once text is provided.")
-        self.assertIsNone(results.get('score'))
-        self.assertIsNone(results.get('tone_analysis'))
-        self.assertIsNone(results.get('bias_analysis'))
-        self.assertIsNone(results.get('manipulation_analysis'))
-        self.assertIsNone(results.get('veracity_signals'))
-        # Old direct fields should not be present
-        self.assertNotIn('inferred_bias_type', results)
-
     # ... (analyze method tests remain unchanged from previous step) ...
     def test_analyze_empty_text_core_solution_structure(self):
-        analysis_result = analyze("")
+        analysis_result = analyse("")
         self.assertEqual(analysis_result['indicator'], 'Error')
         self.assertEqual(analysis_result['explanation'], ["Empty or invalid text provided."]) # Corrected typo
         self.assertEqual(analysis_result['tip'], "Analysis failed: No text was provided. Please input text for analysis.")
@@ -121,7 +108,7 @@ class TestBiasLensAnalyzer(unittest.TestCase):
         }
         self.mock_analyzer_trust_calc.return_value = {'score': 25, 'indicator': '🔴 Risky', 'explanation': ['Risky content.'], 'tip': 'Verify carefully.'}
 
-        result = analyze("Test text for core solution structure", include_patterns=True, include_detailed_results=False)
+        result = analyse("Test text for core solution structure", include_patterns=True, include_detailed_results=False)
         self.assertEqual(result['trust_score'], 25)
 
         # Updated assertion for lightweight_nigerian_bias_assessment
@@ -193,7 +180,7 @@ class TestBiasLensAnalyzer(unittest.TestCase):
             "bias_details": {"type": "political", "type_confidence": 0.8, "nigerian_context": False, "specific_detections": []},
             "clickbait": {}, "recommendations": [], "technical_details": {}
         }
-        result = analyze("Text", include_patterns=True) # include_patterns=True to activate lw_bias_is_specific logic path
+        result = analyse("Text", include_patterns=True) # include_patterns=True to activate lw_bias_is_specific logic path
         self.assertEqual(result['bias_analysis']['source_of_primary_bias'], 'ML Model')
         self.assertEqual(result['bias_analysis']['primary_bias_type'], 'political')
 
@@ -204,7 +191,7 @@ class TestBiasLensAnalyzer(unittest.TestCase):
                              "specific_detections": [{"term": "igbo", "category": "ethnic", "bias_level": "medium"}]},
             "clickbait": {}, "recommendations": [], "technical_details": {}
         }
-        result = analyze("Text", include_patterns=True)
+        result = analyse("Text", include_patterns=True)
         self.assertEqual(result['bias_analysis']['source_of_primary_bias'], 'Pattern Analysis (Nigerian Context)')
         self.assertEqual(result['bias_analysis']['primary_bias_type'], 'ethnic') # from specific_detections[0]['category']
 
@@ -216,7 +203,7 @@ class TestBiasLensAnalyzer(unittest.TestCase):
                              "specific_detections": [{"term": "igbo", "category": "ethnic bias", "bias_level": "high"}]}, # category is "ethnic bias"
             "clickbait": {}, "recommendations": [], "technical_details": {}
         }
-        result = analyze("Text", include_patterns=True)
+        result = analyse("Text", include_patterns=True)
         self.assertEqual(result['bias_analysis']['source_of_primary_bias'], 'ML Model and Pattern Analysis')
         self.assertEqual(result['bias_analysis']['primary_bias_type'], 'ethnic bias')
 
@@ -236,7 +223,7 @@ class TestBiasLensAnalyzer(unittest.TestCase):
         }
 
 
-        result = analyze("Test for detailed results", include_patterns=True, include_detailed_results=True)
+        result = analyse("Test for detailed results", include_patterns=True, include_detailed_results=True)
         self.assertIn('detailed_sub_analyses', result)
         self.assertIn('bias', result['detailed_sub_analyses'])
         # The content of 'bias' is the output of _analyze_bias_safe, which now includes 'raw_new_analyzer_result'
@@ -259,7 +246,7 @@ class TestBiasLensAnalyzer(unittest.TestCase):
 
     def test_analyze_general_exception_core_solution_structure(self):
         self.mock_analyzer_sentiment.side_effect = Exception("Simulated component failure") # This mock is still fine
-        analysis_result = analyze("Some text that will cause an error.")
+        analysis_result = analyse("Some text that will cause an error.")
         self.assertEqual(analysis_result.get('indicator'), 'Error')
         self.assertIsNone(analysis_result['tone_analysis'])
         self.assertIsNone(analysis_result['bias_analysis'])
@@ -267,71 +254,7 @@ class TestBiasLensAnalyzer(unittest.TestCase):
         self.assertIsNone(analysis_result['veracity_signals'])
 
 
-    # --- Tests for quick_analyze with new Core Solution structure ---
-    @patch('biaslens.analyzer.NigerianPatterns.analyze_patterns')
-    @patch('biaslens.analyzer.FakeNewsDetector.detect')
-    # Removed self.mock_enhancer_for_quick_analyze from here
-    def test_quick_analyze_core_solution_structure(self, mock_fake_news_detect, mock_nigerian_patterns):
-        # Patch _analyze_sentiment_safe for the _global_analyzer instance if quick_analyze uses it.
-        # Assuming quick_analyze uses the instance's _analyze_sentiment_safe
-        with patch.object(BiasLensAnalyzer, '_analyze_sentiment_safe', return_value={'label': 'positive', 'confidence': 0.95}) as mock_sentiment_quick_instance_method, \
-             patch.object(BiasLensAnalyzer, '_calculate_basic_trust_score') as mock_basic_trust_score: # Mock basic trust score calculation
-
-            # Setup mocks for quick_analyze components
-            mock_nigerian_patterns.return_value = {'has_triggers': True, 'has_clickbait': True, 'trigger_matches': ['yoruba problem', 'clickbait stuff']}
-            mock_fake_news_detect.return_value = (True, {'risk_level': 'medium', 'fake_matches': ['fake news phrase']})
-            mock_basic_trust_score.return_value = {'score': 60, 'indicator': '🟡 Caution', 'explanation': 'Initial quick check.'}
-
-
-            # Call quick_analyze on an instance, or the global one if that's how it's structured.
-            # The prompt uses `quick_analyze("text")` which implies the global one.
-            # The global `quick_analyze` calls `_global_analyzer.quick_analyze(text)`.
-            # So, instance methods of `_global_analyzer` are what's being called.
-            # The `_analyze_sentiment_safe` is part of the instance, so the patch.object should work if targeted correctly.
-            # Let's assume the existing patch setup for _analyze_sentiment_safe in setUp might cover the global instance if BiasLensAnalyzer is instantiated as _global_analyzer.
-            # For clarity, let's ensure the mock is correctly targeted for the global instance if needed, or rely on setUp's instance mocks if _global_analyzer is THE instance being tested.
-            # The setUp mocks `biaslens.analyzer.BiasLensAnalyzer._analyze_sentiment_safe` which should affect all instances if not careful.
-            # Let's refine the sentiment mock for quick_analyze to be specific to the global analyzer if it's distinct.
-            # However, the original test used `with patch('biaslens.analyzer._global_analyzer._analyze_sentiment_safe')`. This is more specific.
-
-            # Re-instating a more targeted sentiment mock for quick_analyze if it uses the global instance's method
-            with patch('biaslens.analyzer._global_analyzer._analyze_sentiment_safe', return_value={'label': 'positive', 'confidence': 0.95}) as mock_sentiment_for_global_quick:
-                results = quick_analyze("This is a quick test with findings.")
-
-                # Standard top-level fields
-                self.assertEqual(results['score'], 60)
-                self.assertEqual(results['indicator'], '🟡 Caution')
-                self.assertIsInstance(results['explanation'], str)
-                # Updated explanation check
-                self.assertTrue("Initial quick check." in results['explanation']) # Base explanation from mock
-                self.assertTrue("Specific patterns suggest: Pattern-based assessment." in results['explanation']) # Added part
-                self.assertIn(results['tip'], TrustScoreCalculator.DID_YOU_KNOW_TIPS)
-
-                # New structured fields
-                self.assertIn('tone_analysis', results)
-                self.assertEqual(results['tone_analysis'], {'sentiment_label': 'positive', 'sentiment_confidence': 0.95})
-
-                self.assertIn('bias_analysis', results)
-                expected_bias_analysis = {
-                    "primary_bias_type": "Pattern-based assessment",
-                    "bias_category": None, # As per new structure for quick_analyze
-                    "bias_target": None,   # As per new structure for quick_analyze
-                    "matched_keywords": ['yoruba problem', 'clickbait stuff'] # First 3 from NigerianPatterns
-                }
-                self.assertEqual(results['bias_analysis'], expected_bias_analysis)
-
-                self.assertIn('manipulation_analysis', results)
-                self.assertEqual(results['manipulation_analysis'], {'is_clickbait': True}) # from mock_nigerian_patterns
-
-                self.assertIn('veracity_signals', results)
-                expected_veracity = {'fake_news_risk_level': 'medium', 'matched_suspicious_phrases': ['fake news phrase']}
-                self.assertEqual(results['veracity_signals'], expected_veracity)
-
-                # Ensure old flat keys are not present
-                self.assertNotIn('inferred_bias_type', results)
-                self.assertNotIn('bias_category', results)
-                self.assertNotIn('bias_target', results)
-                self.assertNotIn('matched_keywords', results)
+    # Removed test_quick_analyze_core_solution_structure
 
     @patch('biaslens.patterns.ViralityDetector.analyze_virality')
     @patch('biaslens.patterns.NigerianPatterns.analyze_patterns')
@@ -366,12 +289,12 @@ class TestBiasLensAnalyzer(unittest.TestCase):
 
         try:
             # Analyze the text
-            # The global analyze() function creates its own BiasLensAnalyzer instance.
+            # The global analyse() function creates its own BiasLensAnalyzer instance.
             # To test the instance methods with specific unmocked parts, we need to call it on self.analyzer or ensure global uses the same patches.
-            # For simplicity here, and since analyze() is a convenience wrapper, we'll test it directly.
+            # For simplicity here, and since analyse() is a convenience wrapper, we'll test it directly.
             # The patches on staticmethods (NigerianPatterns.analyze_patterns etc.) will apply regardless of instance.
 
-            result = analyze(test_text_with_fake_patterns, include_patterns=True, include_detailed_results=False)
+            result = analyse(test_text_with_fake_patterns, include_patterns=True, include_detailed_results=False)
 
             # Primary assertion: No TypeError should have occurred. If it did, the test would fail before this.
             self.assertIsNotNone(result, "Analysis result should not be None.")
@@ -391,7 +314,7 @@ class TestBiasLensAnalyzer(unittest.TestCase):
 
             # Check that fake_matches in detailed_results (if requested) would be a list of strings
             # This part requires include_detailed_results=True
-            detailed_result = analyze(test_text_with_fake_patterns, include_patterns=True, include_detailed_results=True)
+            detailed_result = analyse(test_text_with_fake_patterns, include_patterns=True, include_detailed_results=True)
             self.assertIn('detailed_sub_analyses', detailed_result)
             self.assertIn('patterns', detailed_result['detailed_sub_analyses'])
             self.assertIn('fake_news', detailed_result['detailed_sub_analyses']['patterns'])

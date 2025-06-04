@@ -16,18 +16,6 @@ EXPECTED_ANALYZE_RESPONSE_KEYS = [
     # "detailed_sub_analyses" is optional and checked in a separate test
 ]
 
-# Expected top-level keys from the new "Core Solution" QuickAnalysisResponseModel
-EXPECTED_QUICK_ANALYZE_RESPONSE_KEYS = [
-    "score",
-    "indicator",
-    "explanation",
-    "tip",
-    "tone_analysis",
-    "bias_analysis",
-    "manipulation_analysis",
-    "veracity_signals",
-]
-
 class TestMainApp(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
@@ -83,27 +71,6 @@ class TestMainApp(unittest.TestCase):
         self.assertIn("bias", response_json["detailed_sub_analyses"])
         self.assertIn("patterns", response_json["detailed_sub_analyses"])
         self.assertIn("lightweight_nigerian_bias", response_json["detailed_sub_analyses"])
-
-    def test_quick_analyze_endpoint_success_core_solution_structure(self):
-        """Test the /quick_analyze endpoint for a successful response and new Core Solution structure."""
-        response = self.client.post("/quick_analyze", json={"text": "Quick test."})
-        self.assertEqual(response.status_code, 200)
-        response_json = response.json()
-
-        for key in EXPECTED_QUICK_ANALYZE_RESPONSE_KEYS:
-            self.assertIn(key, response_json, f"Key '{key}' missing from /quick_analyze response")
-
-        # Ensure old flat bias keys are not at the top level
-        self.assertNotIn("inferred_bias_type", response_json)
-        self.assertNotIn("bias_category", response_json)
-        self.assertNotIn("bias_target", response_json)
-        self.assertNotIn("matched_keywords", response_json)
-
-        # Basic type checks for new nested models
-        self.assertIsInstance(response_json.get("tone_analysis"), dict, "'tone_analysis' should be a dict")
-        self.assertIsInstance(response_json.get("bias_analysis"), dict, "'bias_analysis' should be a dict")
-        self.assertIsInstance(response_json.get("manipulation_analysis"), dict, "'manipulation_analysis' should be a dict")
-        self.assertIsInstance(response_json.get("veracity_signals"), dict, "'veracity_signals' should be a dict")
 
 if __name__ == "__main__":
     unittest.main()

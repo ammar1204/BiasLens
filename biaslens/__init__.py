@@ -1,4 +1,4 @@
-from .analyzer import BiasLensAnalyzer, analyze, quick_analyze
+from .analyzer import BiasLensAnalyzer, analyse
 
 
 
