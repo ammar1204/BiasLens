@@ -178,41 +178,34 @@ const readableKeyMap: Record<string, string> = {
   bias_level: "Bias Level:",
   bias_strength_label: "Bias Strength:",
   primary_bias_type: "Primary Bias Type:",
-  ml_model_confidence: "ML Model Confidence:",
   source_of_primary_bias: "Source of Primary Bias:",
   is_clickbait: "Clickbait Detected:",
-  engagement_bait_score: "Engagement Bait Score:",
-  sensationalism_score: "Sensationalism Score:",
+  engagement_bait_score: "Engagement Bait Level:",
+  sensationalism_score: "Sensationalism Level:",
   fake_news_risk_level: "Fake News Risk Level:",
   matched_suspicious_phrases: "Matched Suspicious Phrases:",
   primary_tone: "Primary Tone:",
   is_emotionally_charged: "Emotionally Charged:",
   emotional_manipulation_risk: "Emotional Manipulation Risk:",
   sentiment_label: "Sentiment:",
-  sentiment_confidence: "Sentiment Confidence:",
   inferred_bias_type: "Inferred Bias Type (Pattern-based):",
   bias_category: "Bias Category (Pattern-based):",
   bias_target: "Bias Target (Pattern-based):",
   matched_keywords: "Matched Keywords (Pattern-based):",
   has_triggers: "Has Triggers:",
   trigger_matches: "Trigger Matches:",
-  trigger_score: "Trigger Score:",
   clickbait_matches: "Clickbait Matches:",
-  clickbait_score: "Clickbait Score:",
   total_flags: "Total Flags:",
   fake_matches: "Matched Fake News Phrases:", // For FakeNewsDetail
   credibility_flags: "Credibility Red Flags:",
-  fake_score: "Fake Score:",
   credibility_score: "Credibility Score:",
   has_viral_patterns: "Has Viral Patterns:",
   viral_matches: "Viral Matches:",
-  viral_score: "Viral Score:",
   manipulation_level: "Manipulation Level:",
   // Keys from BiasDetection objects within nigerian_detections
   term: "Term:",
   category: "Category:",
   // bias_level: "Bias Level:", // Already defined
-  confidence: "Confidence:",
   context: "Context:",
   direction: "Direction:",
   explanation: "Explanation:",
@@ -230,24 +223,17 @@ const readableKeyMap: Record<string, string> = {
   // is_clickbait, confidence, level, detected_patterns, explanation
   detected_patterns: "Detected Clickbait Patterns:",
   // Keys from technical_details (NewBiasLensAnalyzer)
-  base_model_score: "Base Model Score:",
   // explanation: "Technical Explanation:", // Can conflict with other 'explanation' keys
   error: "Error:",
   // For detailed sub-analyses raw fields
   flag: "Flagged:",
   detected: "Detected:",
-  all_scores: "All Sentiment Scores:",
   headline_comparison: "Headline Comparison:",
   trigger_details: "Trigger Details:",
   clickbait_details: "Clickbait Details:",
   details: "Details:", // Generic for FakeNewsDetail.details
   level: "Level:", // Generic, e.g. for clickbait level from NewBiasLensAnalyzer
-  specific_detections: "Specific Detections:",
-  raw_new_analyzer_result: "Raw Bias Analyzer Result:", // From _analyze_bias_safe
-  // Keys from LightweightNigerianBiasAssessmentModel when rendered in full
-  count: "Count of Nigerian Detections:", // New key from recent analyzer.py change
-  categories_present: "Categories Present (Nigerian):", // New key from recent analyzer.py change
-  has_specific_nigerian_bias: "Has Specific Nigerian Bias (ML):" // New key from recent analyzer.py change
+  specific_detections: "Specific Detections:"
 };
 
 export default function AnalyzePage() {
@@ -265,6 +251,30 @@ export default function AnalyzePage() {
   // Since readableKeyMap is global const in this file, renderFieldValue could also be global.
   // Keeping it here for now as it's closely tied to this component's rendering logic.
   const renderFieldValue = (originalKey: string, value: any, isNested: boolean = false): React.ReactNode => {
+    // Keys to explicitly ignore
+    const keysToIgnore: string[] = [
+      "ml_model_confidence",
+      "sentiment_confidence",
+      "confidence", // Exact match for 'confidence'
+      "base_model_score",
+      "all_scores",
+      "trigger_score",
+      "clickbait_score",
+      "fake_score",
+      "viral_score",
+      "raw_new_analyzer_result",
+      "count",
+      "categories_present",
+      "has_specific_nigerian_bias",
+      // The following are now relabeled in readableKeyMap, but if the raw key is still used, ignore.
+      // "engagement_bait_score", // This is now "Engagement Bait Level"
+      // "sensationalism_score" // This is now "Sensationalism Level"
+    ];
+
+    if (keysToIgnore.includes(originalKey)) {
+      return null;
+    }
+
     if (value === null || value === undefined) return null;
     // Avoid rendering the 'error' key if it's already handled or if its value suggests no error.
     // This check might need refinement based on how 'error' fields are structured and used.
@@ -393,6 +403,13 @@ export default function AnalyzePage() {
     return "text-red-600";
   }
 
+  // const getQualitativeAssessment = (score: number | null): string => {
+  //   if (score === null) return "Assessment: Not Available";
+  //   if (score >= 70) return "Assessment: Generally Trustworthy";
+  //   if (score >= 40) return "Assessment: Use Caution";
+  //   return "Assessment: Potential Issues Detected";
+  // };
+
   const renderSubDetail = (title: string, data: any, icon?: React.ReactNode, cardDescription?: string) => {
     if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
         if (data && typeof data === 'object' && data.error && Object.keys(data).length === 1) {
@@ -401,14 +418,24 @@ export default function AnalyzePage() {
         return ( <Card> <CardHeader><CardTitle className="flex items-center gap-2 text-base">{icon || <Info />} {title}</CardTitle>{cardDescription && <CardDescription>{cardDescription}</CardDescription>}</CardHeader> <CardContent><p className="text-sm text-muted-foreground">Data not available or not applicable for this item.</p></CardContent> </Card> );
     }
     const validEntries = Object.entries(data).filter(([_, value]) => value !== null && value !== undefined);
-    if (validEntries.length === 0 || (validEntries.length === 1 && validEntries[0][0] === 'error' && validEntries[0][1])) {
-         return ( <Card> <CardHeader><CardTitle className="flex items-center gap-2 text-base">{icon || <Info />} {title}</CardTitle>{cardDescription && <CardDescription>{cardDescription}</CardDescription>}</CardHeader> <CardContent><p className="text-sm text-muted-foreground">{data.error || "Data not available or not applicable for this item."}</p></CardContent> </Card> );
+    if (validEntries.length === 0 || (validEntries.length === 1 && validEntries[0][0] === 'error' && validEntries[0][1] && typeof validEntries[0][1] === 'string' && validEntries[0][1].trim() !== '' && !validEntries[0][1].toLowerCase().includes("no error") )) {
+         return ( <Card> <CardHeader><CardTitle className="flex items-center gap-2 text-base">{icon || <Info />} {title}</CardTitle>{cardDescription && <CardDescription>{cardDescription}</CardDescription>}</CardHeader> <CardContent><p className="text-sm text-muted-foreground">{ (validEntries.length === 1 && validEntries[0][0] === 'error' ? validEntries[0][1] : "Data not available or not applicable for this item.")}</p></CardContent> </Card> );
     }
+
+    const renderedContent = validEntries
+        .map(([key, value]) => renderFieldValue(key, value, false))
+        .filter(item => item !== null);
+
+    if (renderedContent.length === 0) {
+        // If all fields were filtered out by renderFieldValue, treat as "Data not available"
+        return ( <Card> <CardHeader><CardTitle className="flex items-center gap-2 text-base">{icon || <Info />} {title}</CardTitle>{cardDescription && <CardDescription>{cardDescription}</CardDescription>}</CardHeader> <CardContent><p className="text-sm text-muted-foreground">Data not available or not applicable for this item.</p></CardContent> </Card> );
+    }
+
     return (
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2 text-base">{icon || <Info />} {title}</CardTitle>{cardDescription && <CardDescription>{cardDescription}</CardDescription>}</CardHeader>
-        <CardContent className="space-y-2"> {/* Removed text-sm from here, handled by renderFieldValue */}
-          {validEntries.map(([key, value]) => renderFieldValue(key, value, false))}
+        <CardContent className="space-y-2">
+          {renderedContent}
         </CardContent>
       </Card>
     );
@@ -476,7 +503,12 @@ export default function AnalyzePage() {
               {((analysisMode === 'deep' && (result as DeepAnalysisResult).trust_score !== null) || (analysisMode === 'quick' && (result as QuickAnalysisResult).score !== null)) ? (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-3xl font-bold"> <span className={getTrustScoreColor(analysisMode === 'deep' ? (result as DeepAnalysisResult).trust_score : (result as QuickAnalysisResult).score)}> {(analysisMode === 'deep' ? (result as DeepAnalysisResult).trust_score : (result as QuickAnalysisResult).score)}% </span> <span className="text-xl ml-1">Trust Score</span> </span>
+                    <span className="text-3xl font-bold">
+                      <span className={getTrustScoreColor(analysisMode === 'deep' ? (result as DeepAnalysisResult).trust_score : (result as QuickAnalysisResult).score)}>
+                        {(analysisMode === 'deep' ? (result as DeepAnalysisResult).trust_score : (result as QuickAnalysisResult).score)}%
+                      </span>
+                      <span className="text-xl ml-1">Trust Score</span>
+                    </span>
                     <Badge variant={ (((analysisMode === 'deep' ? (result as DeepAnalysisResult).trust_score : (result as QuickAnalysisResult).score) ?? 0) >= 70 ? "default" : (((analysisMode === 'deep' ? (result as DeepAnalysisResult).trust_score : (result as QuickAnalysisResult).score) ?? 0) >= 40 ? "secondary" : "destructive")) }> {result.indicator || "N/A"} </Badge>
                   </div>
                   <Progress value={(analysisMode === 'deep' ? (result as DeepAnalysisResult).trust_score : (result as QuickAnalysisResult).score)} className="h-3" />
