@@ -75,7 +75,7 @@ class BiasLensAnalyzer:
             self._initialized_components.add('new_bias_analysis')
         return self._new_bias_analyzer
 
-    def analyze(self, text: str, include_patterns: bool = True,
+    def analyse(self, text: str, include_patterns: bool = True,
                 headline: Optional[str] = None, include_detailed_results: bool = False) -> Dict:
         """
         Comprehensive analysis of text for bias, manipulation, and trustworthiness.
@@ -225,96 +225,6 @@ class BiasLensAnalyzer:
                 **default_error_payload,
                 'explanation': [f"An error occurred during analysis: {str(e)}"],
                 'tip': "Analysis failed due to an unexpected error. Please try again later or contact support."
-            }
-
-    def quick_analyze(self, text: str) -> Dict:
-        """
-        Lightweight analysis for quick checks, aligned with "Core Solution" output structure.
-        """
-        default_quick_error_payload = {
-            'score': None, 'indicator': 'Error', 'explanation': None, 'tip': None,
-            'tone_analysis': None, 'bias_analysis': None, 'manipulation_analysis': None,
-            'veracity_signals': None
-            # No lightweight_nigerian_bias_assessment or detailed_sub_analyses in quick_analyze error payload by default
-        }
-
-        if not text or not text.strip():
-            return {
-                **default_quick_error_payload,
-                'explanation': "Empty text provided.",
-                'tip': "No text was provided. Please input text for analysis. For a detailed breakdown of potential biases and manipulation, use the full analyze() function once text is provided.",
-            }
-
-        try:
-            sentiment_result = self._analyze_sentiment_safe(text)
-            nigerian_patterns = NigerianPatterns.analyze_patterns(text)
-            fake_detected, fake_details = FakeNewsDetector.detect(text) # fake_details can be a dict
-
-            # Updated lightweight_bias_info for quick_analyze
-            nigerian_patterns_results = NigerianPatterns.analyze_patterns(text) # Already called, reuse
-            lightweight_bias_info = {
-                "inferred_bias_type": "Pattern-based assessment" if nigerian_patterns_results.get('has_triggers') else "No specific patterns detected",
-                "bias_category": None,
-                "bias_target": None,
-                "matched_keywords": nigerian_patterns_results.get('trigger_matches', [])[:3]
-            }
-
-            basic_trust_score_results = self._calculate_basic_trust_score(
-                sentiment_result, nigerian_patterns, fake_detected, fake_details
-            )
-
-            updated_explanation = basic_trust_score_results.get('explanation', "Quick check results.")
-            lw_inferred_bias_type = lightweight_bias_info.get("inferred_bias_type")
-            if lw_inferred_bias_type and \
-               lw_inferred_bias_type not in ["No specific patterns detected", "Nigerian context detected, specific bias type unclear from patterns"]:
-                if not updated_explanation.endswith("."): updated_explanation += "."
-                updated_explanation += f" Specific patterns suggest: {lw_inferred_bias_type}."
-
-            # New "Core Solution" structured fields for quick_analyze
-            tone_analysis = {
-                "sentiment_label": sentiment_result.get('label'),
-                "sentiment_confidence": sentiment_result.get('confidence')
-                # No primary_tone, is_emotionally_charged, emotional_manipulation_risk in quick
-            }
-            bias_analysis = {
-                "primary_bias_type": lightweight_bias_info.get('inferred_bias_type'),
-                "bias_category": lightweight_bias_info.get('bias_category'),
-                "bias_target": lightweight_bias_info.get('bias_target'),
-                "matched_keywords": lightweight_bias_info.get('matched_keywords', [])
-                # No bias_strength_label, ml_model_confidence, source_of_primary_bias from ML in quick
-            }
-            manipulation_analysis = {
-                "is_clickbait": nigerian_patterns.get('has_clickbait', False)
-                # No engagement_bait_score, sensationalism_score in quick from ViralityDetector
-            }
-
-            # Ensure fake_details is a dict before using .get()
-            current_fake_details = fake_details if isinstance(fake_details, dict) else {}
-            veracity_signals = {
-                "fake_news_risk_level": current_fake_details.get('risk_level'),
-                "matched_suspicious_phrases": current_fake_details.get('fake_matches', [])
-            }
-
-            results = {
-                'score': basic_trust_score_results.get('score'),
-                'indicator': basic_trust_score_results.get('indicator'),
-                'explanation': updated_explanation,
-                'tip': random.choice(TrustScoreCalculator.DID_YOU_KNOW_TIPS),
-                'tone_analysis': tone_analysis,
-                'bias_analysis': bias_analysis,
-                'manipulation_analysis': manipulation_analysis,
-                'veracity_signals': veracity_signals,
-            }
-            return results
-
-        except Exception as e:
-            logger.error(f"Quick analysis failed: {str(e)}", exc_info=True)
-            return {
-                **default_quick_error_payload,
-                'explanation': f"An error occurred during quick analysis: {str(e)}",
-                'tip': "Quick analysis encountered an issue. For a comprehensive analysis including detailed bias types, emotional language, and a full trust assessment, try the full analyze() function.",
-            }
-
     def analyze_headline_content_mismatch(self, headline: str, content: str) -> Dict:
         """
         Specialized analysis for detecting clickbait through headline-content mismatch.
@@ -337,8 +247,8 @@ class BiasLensAnalyzer:
                 }
 
             # Analyze both headline and content
-            headline_analysis = self.analyze(headline, include_patterns=False)
-            content_analysis = self.analyze(content, include_patterns=False)
+            headline_analysis = self.analyse(headline, include_patterns=False)
+            content_analysis = self.analyse(content, include_patterns=False)
 
             # FIXED: Added error checking before sentiment comparison
             if (headline_analysis.get('indicator') == 'Error' or
@@ -739,7 +649,7 @@ _global_analyzer = BiasLensAnalyzer()
 
 
 # Convenience function for direct usage
-def analyze(text: str, include_patterns: bool = True, headline: Optional[str] = None,
+def analyse(text: str, include_patterns: bool = True, headline: Optional[str] = None,
             include_detailed_results: bool = False) -> Dict:
     """
     Direct analysis function - uses a global analyzer instance to run analysis.
@@ -754,19 +664,5 @@ def analyze(text: str, include_patterns: bool = True, headline: Optional[str] = 
         Complete analysis results
     """
     # Uses the global analyzer instance
-    return _global_analyzer.analyze(text, include_patterns, headline, include_detailed_results)
+    return _global_analyzer.analyse(text, include_patterns, headline, include_detailed_results)
 
-
-# Quick analysis function
-def quick_analyze(text: str) -> Dict:
-    """
-    Quick analysis function for lightweight processing - uses a global analyzer instance.
-
-    Args:
-        text: Text to analyze
-
-    Returns:
-        Basic analysis results (sentiment + patterns only)
-    """
-    # Uses the global analyzer instance
-    return _global_analyzer.quick_analyze(text)
