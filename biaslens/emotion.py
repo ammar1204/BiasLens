@@ -13,22 +13,22 @@ class EmotionClassifier:
             }
         self.tokenizer = _model_cache[model_name]["tokenizer"]
         self.model = _model_cache[model_name]["model"]
-        self.labels = [
-            'admiration', 'amusement', 'anger', 'annoyance', 'approval', 'caring',
-            'confusion', 'curiosity', 'desire', 'disappointment', 'disapproval',
-            'disgust', 'embarrassment', 'excitement', 'fear', 'gratitude', 'grief',
-            'joy', 'love', 'nervousness', 'optimism', 'pride', 'realization',
-            'relief', 'remorse', 'sadness', 'surprise', 'neutral'
-        ]
+        self.labels = ['sadness', 'joy', 'love', 'anger', 'fear', 'surprise']
 
         # Emotion intensity grouping for bias analysis
+        # 'neutral' is not a direct output of the bhadresh-savani model with 6 labels.
+        # We will define intensity based on the 6 emotions.
         self.emotion_intensity = {
-            'high_intensity': ['anger', 'fear', 'disgust', 'grief', 'excitement'],
-            'medium_intensity': ['annoyance', 'disappointment', 'disapproval', 'nervousness', 'surprise'],
-            'low_intensity': ['confusion', 'curiosity', 'realization', 'neutral'],
-            'positive': ['admiration', 'amusement', 'approval', 'caring', 'gratitude', 'joy', 'love', 'optimism',
-                         'pride', 'relief']
+            'high_intensity': ['anger', 'fear', 'sadness'], # Typically strong negative emotions
+            'positive_intensity': ['joy', 'love'], # Typically strong positive emotions
+            'surprise_intensity': ['surprise'], # Surprise can be strong but is valence-ambiguous
+            # No 'low_intensity' or 'medium_intensity' explicitly defined here unless mapped from the above
+            # For 'is_emotionally_charged', we'll focus on high_intensity and positive_intensity.
         }
+        # For _calculate_manipulation_risk, we will use these definitions:
+        self.positive_emotions_for_risk = ['joy', 'love'] # Surprise is less about manipulation risk here
+        self.negative_emotions_for_risk = ['sadness', 'anger', 'fear']
+
 
     def classify(self, text, top_k=3):
         try:
@@ -55,10 +55,13 @@ class EmotionClassifier:
                 })
 
             # Determine emotion intensity category
-            intensity_category = self._get_intensity_category(primary_emotion)
+            intensity_category = self._get_intensity_category(primary_emotion) # This will use the updated self.emotion_intensity
 
             # Calculate emotional manipulation risk
-            manipulation_risk = self._calculate_manipulation_risk(primary_emotion, confidence)
+            manipulation_risk = self._calculate_manipulation_risk(primary_emotion, confidence) # This will use updated positive/negative lists
+
+            # Moderate intensity threshold for being charged (example, can be tuned)
+            moderate_intensity_threshold = 0.6 # Using confidence directly as a proxy for intensity strength
 
             return {
                 "label": primary_emotion,
@@ -66,8 +69,7 @@ class EmotionClassifier:
                 "intensity_category": intensity_category,
                 "manipulation_risk": manipulation_risk,
                 "top_emotions": top_emotions,
-                "is_emotionally_charged": confidence > 0.7 and intensity_category in ['high_intensity',
-                                                                                      'medium_intensity']
+                "is_emotionally_charged": confidence >= moderate_intensity_threshold # Updated logic
             }
 
         except Exception as e:
@@ -83,21 +85,33 @@ class EmotionClassifier:
 
     def _get_intensity_category(self, emotion):
         """Categorize emotion by intensity level"""
-        for category, emotions in self.emotion_intensity.items():
-            if emotion in emotions:
+        # Adjusted to use the new 6-label system
+        for category, emotions_list in self.emotion_intensity.items():
+            if emotion in emotions_list:
                 return category
+        # Fallback if an emotion (somehow) isn't in the new intensity map
+        if emotion in self.negative_emotions_for_risk: return 'high_intensity' # Default for known negative
+        if emotion in self.positive_emotions_for_risk: return 'positive_intensity' # Default for known positive
         return "unknown"
 
     def _calculate_manipulation_risk(self, emotion, confidence):
-        """Calculate risk of emotional manipulation based on emotion type and confidence"""
-        high_risk_emotions = ['anger', 'fear', 'disgust', 'grief']
-        medium_risk_emotions = ['annoyance', 'disappointment', 'disapproval', 'excitement']
+        """Calculate risk of emotional manipulation based on emotion type and confidence,
+           adapted for 6 labels.
+        """
+        # Using negative_emotions_for_risk for high manipulation potential
+        # Joy/Love (positive_emotions_for_risk) could also be manipulative if confidence is very high,
+        # but typically less so than fear/anger. Surprise is neutral in this context.
 
-        if emotion in high_risk_emotions and confidence > 0.7:
+        if emotion in self.negative_emotions_for_risk and confidence > 0.7: # e.g. fear, anger
             return "high"
-        elif emotion in medium_risk_emotions and confidence > 0.6:
+        elif emotion in self.negative_emotions_for_risk and confidence > 0.5: # e.g. sadness
             return "medium"
-        elif emotion in high_risk_emotions or (emotion in medium_risk_emotions and confidence > 0.4):
+        # Consider very high confidence positive emotions as potentially manipulative (e.g. excessive hype)
+        elif emotion in self.positive_emotions_for_risk and confidence > 0.85:
+            return "medium"
+        elif emotion in self.negative_emotions_for_risk and confidence > 0.3: # Lower confidence negative
             return "low"
-        else:
+        elif emotion in self.positive_emotions_for_risk and confidence > 0.6: # Moderate positive
+            return "low"
+        else: # Includes 'surprise' and low confidence positive/negative emotions
             return "minimal"
