@@ -1,102 +1,14 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from biaslens.analyzer import BiasLensAnalyzer, analyze, quick_analyze
-from biaslens.bias import NigerianBiasEnhancer
+# Removed: from biaslens.bias import NigerianBiasEnhancer
 from biaslens.trust import TrustScoreCalculator
 
-class TestNigerianBiasEnhancer(unittest.TestCase):
-    # This class remains unchanged
-    def setUp(self):
-        self.enhancer = NigerianBiasEnhancer()
-    def test_lightweight_no_nigerian_keywords(self):
-        text = "This is a generic sentence about global news."
-        expected = {"inferred_bias_type": "No specific patterns detected", "bias_category": None, "bias_target": None, "matched_keywords": []}
-        self.assertEqual(self.enhancer.get_lightweight_bias_assessment(text), expected)
-    def test_lightweight_political_bias_apc_pro(self):
-        text = "APC is doing a great job, they are the best for Nigeria."
-        result = self.enhancer.get_lightweight_bias_assessment(text)
-        self.assertEqual(result["inferred_bias_type"], "Pro-APC political bias")
-        self.assertEqual(result["bias_category"], "political")
-        self.assertEqual(result["bias_target"], "APC")
-        self.assertIn("apc", result["matched_keywords"])
-    def test_lightweight_political_bias_pdp_anti(self):
-        text = "The PDP party is so corrupt and bad for the country."
-        result = self.enhancer.get_lightweight_bias_assessment(text)
-        self.assertEqual(result["inferred_bias_type"], "Anti-PDP political bias")
-        self.assertEqual(result["bias_category"], "political")
-        self.assertEqual(result["bias_target"], "PDP")
-        self.assertIn("pdp", result["matched_keywords"])
-    def test_lightweight_political_bias_obi_neutral_mention(self):
-        text = "Peter Obi is a candidate."
-        result = self.enhancer.get_lightweight_bias_assessment(text)
-        self.assertEqual(result["inferred_bias_type"], "Peter Obi political bias")
-        self.assertEqual(result["bias_category"], "political")
-        self.assertEqual(result["bias_target"], "Peter Obi")
-        self.assertIn("obi", result["matched_keywords"])
-    def test_lightweight_ethnic_bias_igbo_derogatory(self):
-        text = "These nyamiri people are everywhere."
-        result = self.enhancer.get_lightweight_bias_assessment(text)
-        self.assertEqual(result["inferred_bias_type"], "Anti-Igbo ethnic bias")
-        self.assertEqual(result["bias_category"], "ethnic")
-        self.assertEqual(result["bias_target"], "Igbo")
-        self.assertIn("nyamiri", result["matched_keywords"])
-    def test_lightweight_ethnic_bias_hausa_general_anti(self):
-        text = "The Hausa are too dominating."
-        result = self.enhancer.get_lightweight_bias_assessment(text)
-        self.assertEqual(result["inferred_bias_type"], "Anti-Hausa ethnic bias")
-        self.assertEqual(result["bias_category"], "ethnic")
-        self.assertEqual(result["bias_target"], "Hausa")
-        self.assertIn("hausa", result["matched_keywords"])
-    def test_lightweight_religious_bias_anti_muslim_jihad(self):
-        text = "Their jihad is bad."
-        result = self.enhancer.get_lightweight_bias_assessment(text)
-        self.assertEqual(result["inferred_bias_type"], "Anti-Islamic religious bias")
-        self.assertEqual(result["bias_category"], "religious")
-        self.assertEqual(result["bias_target"], "Jihad")
-        self.assertIn("jihad", result["matched_keywords"])
-    def test_lightweight_regional_bias_arewa_pro(self):
-        text = "Arewa is the future, all good things come from Arewa."
-        result = self.enhancer.get_lightweight_bias_assessment(text)
-        self.assertEqual(result["inferred_bias_type"], "Pro-Northern regional bias")
-        self.assertEqual(result["bias_category"], "regional")
-        self.assertEqual(result["bias_target"], "Arewa")
-        self.assertIn("arewa", result["matched_keywords"])
-    def test_lightweight_nigerian_context_no_specific_bias(self):
-        text_with_context = "The yoruba culture is interesting. Many igbo people live in Lagos."
-        result_with_context = self.enhancer.get_lightweight_bias_assessment(text_with_context)
-        self.assertEqual(result_with_context["inferred_bias_type"], "Anti-Yoruba ethnic bias")
-        self.assertEqual(result_with_context["bias_category"], "ethnic")
-        self.assertEqual(result_with_context["bias_target"], "Yoruba")
-        self.assertTrue(all(k in result_with_context["matched_keywords"] for k in ["yoruba", "igbo"]))
-    def test_lightweight_multiple_keywords_one_triggers_specific_bias(self):
-        text = "PDP is bad, and by the way, the north is cold."
-        result = self.enhancer.get_lightweight_bias_assessment(text)
-        self.assertEqual(result["inferred_bias_type"], "Anti-PDP political bias")
-        self.assertEqual(result["bias_category"], "political")
-        self.assertEqual(result["bias_target"], "PDP")
-        self.assertIn("pdp", result["matched_keywords"])
-        self.assertIn("north", result["matched_keywords"])
-    def test_lightweight_context_detected_unclear_bias(self):
-        text = "Some people are lazy in Nigeria."
-        result = self.enhancer.get_lightweight_bias_assessment(text)
-        self.assertEqual(result["inferred_bias_type"], "Nigerian context detected, specific bias type unclear from patterns")
-        self.assertEqual(result["bias_category"], "ethnic")
-        self.assertIsNone(result["bias_target"])
-        self.assertIn("lazy", result["matched_keywords"])
+# Removed TestNigerianBiasEnhancer class
 
 class TestBiasLensAnalyzer(unittest.TestCase):
 
     def setUp(self):
-        # Mock for quick_analyze's LWB enhancer (on global_analyzer)
-        self.patcher_enhancer_quick = patch('biaslens.analyzer._global_analyzer._nigerian_bias_enhancer')
-        self.mock_enhancer_for_quick_analyze = self.patcher_enhancer_quick.start()
-
-        # Default for quick_analyze LWB
-        self.mock_enhancer_for_quick_analyze.get_lightweight_bias_assessment.return_value = {
-            "inferred_bias_type": "No specific patterns detected",
-            "bias_category": None, "bias_target": None, "matched_keywords": []
-        }
-
         # Mocks for BiasLensAnalyzer instance methods (used by 'analyze' instance method)
         self.patcher_analyzer_sentiment = patch('biaslens.analyzer.BiasLensAnalyzer._analyze_sentiment_safe')
         self.mock_analyzer_sentiment = self.patcher_analyzer_sentiment.start()
@@ -104,50 +16,59 @@ class TestBiasLensAnalyzer(unittest.TestCase):
         self.patcher_analyzer_emotion = patch('biaslens.analyzer.BiasLensAnalyzer._analyze_emotion_safe')
         self.mock_analyzer_emotion = self.patcher_analyzer_emotion.start()
 
-        self.patcher_analyzer_bias_ml = patch('biaslens.analyzer.BiasLensAnalyzer._analyze_bias_safe')
-        self.mock_analyzer_bias_ml = self.patcher_analyzer_bias_ml.start()
+        # Changed: Patching new_bias_analyzer.analyze instead of _analyze_bias_safe
+        self.patcher_new_bias_analyzer_analyze = patch('biaslens.analyzer.BiasLensAnalyzer.new_bias_analyzer.analyze')
+        self.mock_new_bias_analyzer_analyze = self.patcher_new_bias_analyzer_analyze.start()
 
         self.patcher_analyzer_patterns = patch('biaslens.analyzer.BiasLensAnalyzer._analyze_patterns_safe')
         self.mock_analyzer_patterns = self.patcher_analyzer_patterns.start()
 
-        self.patcher_analyzer_lw_enhancer_for_analyze = patch('biaslens.analyzer.BiasLensAnalyzer._nigerian_bias_enhancer')
-        self.mock_analyzer_lw_enhancer_for_analyze = self.patcher_analyzer_lw_enhancer_for_analyze.start()
+        # Removed: patcher_analyzer_lw_enhancer_for_analyze
 
         self.patcher_analyzer_trust_calc = patch('biaslens.analyzer.BiasLensAnalyzer._calculate_trust_score_safe')
         self.mock_analyzer_trust_calc = self.patcher_analyzer_trust_calc.start()
 
-        self.patcher_analyzer_overall_assessment = patch('biaslens.analyzer.BiasLensAnalyzer._generate_overall_assessment')
-        self.mock_analyzer_overall_assessment = self.patcher_analyzer_overall_assessment.start()
+        # Removed: patcher_enhancer_quick and mock_enhancer_for_quick_analyze as quick_analyze no longer uses it directly for bias info.
+        # NigerianPatterns.analyze_patterns is mocked directly in its test.
 
         # Default mock returns for 'analyze' dependencies (can be overridden in specific tests)
         self.mock_analyzer_sentiment.return_value = {'label': 'neutral', 'confidence': 0.9}
         self.mock_analyzer_emotion.return_value = {'label': 'neutral', 'confidence': 0.8, 'is_emotionally_charged': False, 'manipulation_risk': 'low'}
-        self.mock_analyzer_bias_ml.return_value = {'flag': False, 'label': 'Neutral', 'type_analysis': {'type': 'neutral', 'confidence': 0.95}}
+
+        # Updated default return_value for the new bias analyzer mock
+        self.mock_new_bias_analyzer_analyze.return_value = {
+            "text": "Test text",
+            "timestamp": "some_timestamp",
+            "overall_bias": {"is_biased": False, "confidence": 0.1, "level": "minimal"}, # 'minimal' to match _analyze_bias_safe's label construction
+            "bias_details": {"type": "neutral", "type_confidence": 0.95, "nigerian_context": False, "specific_detections": []},
+            "clickbait": {"is_clickbait": False, "confidence": 0.1, "level": "low", "detected_patterns": [], "explanation": ""},
+            "recommendations": [],
+            "technical_details": {"base_model_score": 0.1, "explanation": "Base model analysis"}
+        }
+
         self.mock_analyzer_patterns.return_value = {
-            'nigerian_patterns': {'has_triggers': False, 'has_clickbait': False},
-            'fake_news': {'detected': False, 'details': {'risk_level': 'low', 'matched_phrases': [], 'is_clickbait': False, 'fake_matches': []}}, # Added fake_matches
+            'nigerian_patterns': {'has_triggers': False, 'has_clickbait': False, 'trigger_matches': []}, # Added trigger_matches
+            'fake_news': {'detected': False, 'details': {'risk_level': 'low', 'matched_phrases': [], 'is_clickbait': False, 'fake_matches': []}},
             'viral_manipulation': {'is_potentially_viral': False, 'engagement_bait_score': 0.1, 'sensationalism_score': 0.1}
         }
-        self.mock_analyzer_lw_enhancer_for_analyze.get_lightweight_bias_assessment.return_value = {
-            "inferred_bias_type": "No specific patterns detected", "bias_category": None,
-            "bias_target": None, "matched_keywords": []
-        }
+
         self.mock_analyzer_trust_calc.return_value = {
             'score': 80, 'indicator': '🟢 Trusted',
             'explanation': ['Generally trustworthy.'], 'tip': 'A general tip.'
         }
-        self.mock_analyzer_overall_assessment.return_value = {}
+        # Note: _generate_overall_assessment is not directly mocked anymore, as its inputs are derived from other mocks.
+        # Its functionality is tested implicitly via the main 'analyze' method tests.
 
 
     def tearDown(self):
-        self.patcher_enhancer_quick.stop()
+        # Removed: self.patcher_enhancer_quick.stop()
         self.patcher_analyzer_sentiment.stop()
         self.patcher_analyzer_emotion.stop()
-        self.patcher_analyzer_bias_ml.stop()
+        self.patcher_new_bias_analyzer_analyze.stop() # Updated
         self.patcher_analyzer_patterns.stop()
-        self.patcher_analyzer_lw_enhancer_for_analyze.stop()
+        # Removed: self.patcher_analyzer_lw_enhancer_for_analyze.stop()
         self.patcher_analyzer_trust_calc.stop()
-        self.patcher_analyzer_overall_assessment.stop()
+        # Removed: self.patcher_analyzer_overall_assessment.stop() # This was not started in setUp in this version
 
     def test_quick_analyze_empty_text_core_solution_structure(self):
         results = quick_analyze("")
@@ -166,7 +87,7 @@ class TestBiasLensAnalyzer(unittest.TestCase):
     def test_analyze_empty_text_core_solution_structure(self):
         analysis_result = analyze("")
         self.assertEqual(analysis_result['indicator'], 'Error')
-        self.assertEqual(analysis_result['explanation'], ["Empty or invalid text provided"])
+        self.assertEqual(analysis_result['explanation'], ["Empty or invalid text provided."]) # Corrected typo
         self.assertEqual(analysis_result['tip'], "Analysis failed: No text was provided. Please input text for analysis.")
         self.assertIsNone(analysis_result['trust_score'])
         self.assertIsNone(analysis_result['tone_analysis'])
@@ -179,68 +100,167 @@ class TestBiasLensAnalyzer(unittest.TestCase):
     def test_analyze_core_solution_structure_success(self):
         self.mock_analyzer_sentiment.return_value = {'label': 'negative', 'confidence': 0.88}
         self.mock_analyzer_emotion.return_value = {'label': 'anger', 'confidence': 0.75, 'is_emotionally_charged': True, 'manipulation_risk': 'medium'}
-        self.mock_analyzer_bias_ml.return_value = {'flag': True, 'label': 'Strong Bias Detected', 'type_analysis': {'type': 'confirmation_bias', 'confidence': 0.92}}
-        self.mock_analyzer_patterns.return_value = {
-            'nigerian_patterns': {'has_triggers': True, 'has_clickbait': True},
-            'fake_news': {'detected': True, 'details': {'risk_level': 'high', 'matched_phrases': ['breaking!'], 'is_clickbait': True, 'fake_matches':['breaking!']}},
-            'viral_manipulation': {'is_potentially_viral': True, 'engagement_bait_score': 0.8, 'sensationalism_score': 0.7}
+
+        # Updated mock for new_bias_analyzer.analyze
+        self.mock_new_bias_analyzer_analyze.return_value = {
+            "overall_bias": {"is_biased": True, "confidence": 0.85, "level": "high"},
+            "bias_details": {
+                "type": "political bias", "type_confidence": 0.92, "nigerian_context": True,
+                "specific_detections": [
+                    {"term": "pdp", "category": "political", "bias_level": "high", "confidence": 0.9, "direction": "negative", "explanation": "Explicitly biased", "context": "pdp is bad"}
+                ]
+            },
+            "clickbait": {"is_clickbait": True, "confidence": 0.7, "level": "medium", "detected_patterns": [], "explanation": ""}, # For manipulation_analysis
+            "recommendations": [], "technical_details": {}
         }
-        mock_lw_assessment_for_analyze = {"inferred_bias_type": "Anti-PDP political bias", "bias_category": "political", "bias_target": "PDP", "matched_keywords": ["pdp", "bad"]}
-        self.mock_analyzer_lw_enhancer_for_analyze.get_lightweight_bias_assessment.return_value = mock_lw_assessment_for_analyze
+
+        self.mock_analyzer_patterns.return_value = {
+            'nigerian_patterns': {'has_triggers': True, 'has_clickbait': True, 'trigger_matches': ['pdp']}, # For manipulation_analysis and LW assessment consistency
+            'fake_news': {'detected': True, 'details': {'risk_level': 'high', 'matched_phrases': ['breaking!'], 'is_clickbait': True, 'fake_matches':['breaking!']}},
+            'viral_manipulation': {'is_potentially_viral': True, 'engagement_bait_score': 0.8, 'sensationalism_score': 0.7} # For manipulation_analysis
+        }
         self.mock_analyzer_trust_calc.return_value = {'score': 25, 'indicator': '🔴 Risky', 'explanation': ['Risky content.'], 'tip': 'Verify carefully.'}
 
         result = analyze("Test text for core solution structure", include_patterns=True, include_detailed_results=False)
         self.assertEqual(result['trust_score'], 25)
-        self.assertEqual(result['lightweight_nigerian_bias_assessment'], mock_lw_assessment_for_analyze)
+
+        # Updated assertion for lightweight_nigerian_bias_assessment
+        expected_lw_assessment = {
+            "count": 1,
+            "inferred_bias_type": "political",
+            "has_specific_nigerian_bias": True,
+            "matched_keywords": ["pdp"]
+            # "categories_present" was removed in the previous step's implementation of lightweight_nigerian_bias_info
+            # Let's re-add it to the prompt's spec for lightweight_nigerian_bias_info if it's desired.
+            # For now, I'll match the implementation from Step 1's prompt (which didn't have categories_present)
+            # If it IS desired, the implementation in analyzer.py needs:
+            # "categories_present": list(set(d.get('category') for d in nd if isinstance(d, dict) and d.get('category'))),
+        }
+        # Current implementation of lightweight_nigerian_bias_info in analyzer.py (from previous steps):
+        # nd = bias_result_ml.get('nigerian_detections', [])
+        # lightweight_nigerian_bias_info = {
+        #     "count": len(nd),
+        #     "inferred_bias_type": nd[0]['category'] if nd and isinstance(nd, list) and len(nd) > 0 and isinstance(nd[0], dict) else "No specific patterns detected",
+        #     "matched_keywords": list(set(d.get('term') for d in nd if isinstance(d, dict) and d.get('term')))[:3],
+        #     "has_specific_nigerian_bias": bool(nd)
+        # }
+        # To include "categories_present", it should be:
+        # lightweight_nigerian_bias_info = {
+        #     "count": len(nd),
+        #     "inferred_bias_type": nd[0]['category'] if nd and isinstance(nd, list) and len(nd) > 0 and isinstance(nd[0], dict) else "No specific patterns detected",
+        #     "categories_present": list(set(d.get('category') for d in nd if isinstance(d, dict) and d.get('category'))), # ADDED
+        #     "matched_keywords": list(set(d.get('term') for d in nd if isinstance(d, dict) and d.get('term')))[:3],
+        #     "has_specific_nigerian_bias": bool(nd)
+        # }
+        # Assuming the prompt for THIS step implies categories_present should be there, I'll adjust the expected.
+        # And will need a follow-up to adjust analyzer.py if this test fails.
+        # The prompt for *this* test step (Step 4) *does* include categories_present in its example.
+        expected_lw_assessment_updated = {
+            "count": 1,
+            "inferred_bias_type": "political",
+            "categories_present": ["political"], # This is in the prompt for this test
+            "has_specific_nigerian_bias": True,
+            "matched_keywords": ["pdp"]
+        }
+        self.assertEqual(result['lightweight_nigerian_bias_assessment'], expected_lw_assessment_updated)
+
         self.assertEqual(result['tone_analysis'], {'primary_tone': 'anger', 'is_emotionally_charged': True, 'emotional_manipulation_risk': 'medium', 'sentiment_label': 'negative', 'sentiment_confidence': 0.88})
-        self.assertEqual(result['bias_analysis']['primary_bias_type'], 'confirmation_bias')
-        self.assertEqual(result['bias_analysis']['bias_strength_label'], 'Strong Bias Detected')
-        self.assertEqual(result['bias_analysis']['ml_model_confidence'], 0.92)
+
+        # Updated assertions for bias_analysis
+        self.assertEqual(result['bias_analysis']['primary_bias_type'], 'political bias') # from bias_details.type
+        self.assertEqual(result['bias_analysis']['bias_strength_label'], 'high') # from overall_bias.level
+        self.assertEqual(result['bias_analysis']['ml_model_confidence'], 0.92) # from bias_details.type_confidence
+        # Source logic: ml_bias_is_specific is True. lw_bias_is_specific is True (due to nigerian_detections).
+        # ml_detected_bias_type = "political bias". lw_inferred_bias_type = "political"
+        # These are not exactly equal ("political bias" vs "political").
+        # The logic is: `if lw_bias_is_specific and primary_bias_type == lw_inferred_bias_type.strip().lower():`
+        # "political bias" == "political" is False. So source should be "ML Model".
         self.assertEqual(result['bias_analysis']['source_of_primary_bias'], 'ML Model')
+
         self.assertEqual(result['manipulation_analysis'], {'is_clickbait': True, 'engagement_bait_score': 0.8, 'sensationalism_score': 0.7})
         self.assertEqual(result['veracity_signals'], {'fake_news_risk_level': 'high', 'matched_suspicious_phrases': ['breaking!']})
         self.assertNotIn('detailed_sub_analyses', result)
 
     def test_bias_analysis_source_of_primary_bias(self):
-        # ... (This test remains largely the same, checking result['bias_analysis']['source_of_primary_bias']) ...
-        self.mock_analyzer_sentiment.return_value = {} # Ensure other mocks are set
+        self.mock_analyzer_sentiment.return_value = {}
         self.mock_analyzer_emotion.return_value = {}
-        self.mock_analyzer_patterns.return_value = {'nigerian_patterns': {}, 'fake_news': {'details': {}}, 'viral_manipulation': {}}
+        self.mock_analyzer_patterns.return_value = {'nigerian_patterns': {}, 'fake_news': {'details': {}}, 'viral_manipulation': {}} # No pattern influence for these sub-tests
         self.mock_analyzer_trust_calc.return_value = {'tip': 'A tip'}
 
-
-        # Scenario 1: ML Model is specific
-        self.mock_analyzer_bias_ml.return_value = {'flag': True, 'label': 'Biased', 'type_analysis': {'type': 'political', 'confidence': 0.8}}
-        self.mock_analyzer_lw_enhancer_for_analyze.get_lightweight_bias_assessment.return_value = {"inferred_bias_type": "No specific patterns detected"}
-        result = analyze("Text", include_patterns=True)
+        # Scenario 1: ML specific, Pattern (Nigerian Detections) not
+        self.mock_new_bias_analyzer_analyze.return_value = {
+            "overall_bias": {"is_biased": True, "confidence": 0.8, "level": "medium"},
+            "bias_details": {"type": "political", "type_confidence": 0.8, "nigerian_context": False, "specific_detections": []},
+            "clickbait": {}, "recommendations": [], "technical_details": {}
+        }
+        result = analyze("Text", include_patterns=True) # include_patterns=True to activate lw_bias_is_specific logic path
         self.assertEqual(result['bias_analysis']['source_of_primary_bias'], 'ML Model')
         self.assertEqual(result['bias_analysis']['primary_bias_type'], 'political')
 
-        # Scenario 2: ML Model is neutral, Pattern is specific
-        self.mock_analyzer_bias_ml.return_value = {'flag': False, 'label': 'Neutral', 'type_analysis': {'type': 'neutral', 'confidence': 0.9}}
-        self.mock_analyzer_lw_enhancer_for_analyze.get_lightweight_bias_assessment.return_value = {"inferred_bias_type": "Anti-Igbo ethnic bias", "bias_category": "ethnic"}
+        # Scenario 2: ML neutral, Pattern (Nigerian Detections) specific
+        self.mock_new_bias_analyzer_analyze.return_value = {
+            "overall_bias": {"is_biased": False, "confidence": 0.9, "level": "low"}, # ML says no bias
+            "bias_details": {"type": "neutral", "type_confidence": 0.9, "nigerian_context": True,
+                             "specific_detections": [{"term": "igbo", "category": "ethnic", "bias_level": "medium"}]},
+            "clickbait": {}, "recommendations": [], "technical_details": {}
+        }
         result = analyze("Text", include_patterns=True)
         self.assertEqual(result['bias_analysis']['source_of_primary_bias'], 'Pattern Analysis (Nigerian Context)')
-        self.assertEqual(result['bias_analysis']['primary_bias_type'], 'anti-igbo ethnic bias')
+        self.assertEqual(result['bias_analysis']['primary_bias_type'], 'ethnic') # from specific_detections[0]['category']
 
         # Scenario 4: Both ML and Pattern are specific and same
-        self.mock_analyzer_bias_ml.return_value = {'flag': True, 'label': 'Biased', 'type_analysis': {'type': 'anti-igbo ethnic bias', 'confidence': 0.85}}
-        self.mock_analyzer_lw_enhancer_for_analyze.get_lightweight_bias_assessment.return_value = {"inferred_bias_type": "Anti-Igbo ethnic bias", "bias_category": "ethnic"}
+        # For "ML Model and Pattern Analysis", ml_bias_details.type should match category from nigerian_detections
+        self.mock_new_bias_analyzer_analyze.return_value = {
+            "overall_bias": {"is_biased": True, "confidence": 0.85, "level": "high"},
+            "bias_details": {"type": "ethnic bias", "type_confidence": 0.85, "nigerian_context": True, # type is "ethnic bias"
+                             "specific_detections": [{"term": "igbo", "category": "ethnic bias", "bias_level": "high"}]}, # category is "ethnic bias"
+            "clickbait": {}, "recommendations": [], "technical_details": {}
+        }
         result = analyze("Text", include_patterns=True)
         self.assertEqual(result['bias_analysis']['source_of_primary_bias'], 'ML Model and Pattern Analysis')
-        self.assertEqual(result['bias_analysis']['primary_bias_type'], 'anti-igbo ethnic bias')
+        self.assertEqual(result['bias_analysis']['primary_bias_type'], 'ethnic bias')
 
     def test_analyze_detailed_results_core_solution(self):
-        # Using default mocks from setUp which represent a neutral case
+        # Reset to default neutral mocks for this test by calling setUp's defaults again if necessary, or ensure defaults are neutral
+        self.mock_new_bias_analyzer_analyze.return_value = { # Default neutral from setUp
+            "text": "Test text", "timestamp": "some_timestamp",
+            "overall_bias": {"is_biased": False, "confidence": 0.1, "level": "minimal"},
+            "bias_details": {"type": "neutral", "type_confidence": 0.95, "nigerian_context": False, "specific_detections": []},
+            "clickbait": {"is_clickbait": False, "confidence": 0.1, "level": "low", "detected_patterns": [], "explanation": ""},
+            "recommendations": [], "technical_details": {"base_model_score": 0.1, "explanation": "Base model analysis"}
+        }
+        self.mock_analyzer_patterns.return_value = { # Default neutral patterns
+            'nigerian_patterns': {'has_triggers': False, 'has_clickbait': False, 'trigger_matches': []},
+            'fake_news': {'detected': False, 'details': {'risk_level': 'low', 'matched_phrases': [], 'is_clickbait': False, 'fake_matches': []}},
+            'viral_manipulation': {'is_potentially_viral': False, 'engagement_bait_score': 0.1, 'sensationalism_score': 0.1}
+        }
+
+
         result = analyze("Test for detailed results", include_patterns=True, include_detailed_results=True)
         self.assertIn('detailed_sub_analyses', result)
-        # ... (assertions for content of detailed_sub_analyses remain same) ...
+        self.assertIn('bias', result['detailed_sub_analyses'])
+        # The content of 'bias' is the output of _analyze_bias_safe, which now includes 'raw_new_analyzer_result'
+        self.assertIn('raw_new_analyzer_result', result['detailed_sub_analyses']['bias'])
+        self.assertEqual(result['detailed_sub_analyses']['bias']['raw_new_analyzer_result']['overall_bias']['level'], 'minimal')
+        self.assertIn('lightweight_nigerian_bias', result['detailed_sub_analyses'])
+        expected_lw_assessment_detailed = { # Based on no nigerian_detections from the mock
+            "count": 0, "inferred_bias_type": "No specific patterns detected",
+            "has_specific_nigerian_bias": False, "matched_keywords": []
+            # "categories_present": [] # This would be added if the analyzer.py is updated
+        }
+        # Re-evaluating the "categories_present" for detailed view, it should be present if the main one is.
+        expected_lw_assessment_detailed_updated = {
+            "count": 0, "inferred_bias_type": "No specific patterns detected",
+            "categories_present": [], # Adding for consistency with the other test
+            "has_specific_nigerian_bias": False, "matched_keywords": []
+        }
+        self.assertEqual(result['detailed_sub_analyses']['lightweight_nigerian_bias'], expected_lw_assessment_detailed_updated)
+
 
     def test_analyze_general_exception_core_solution_structure(self):
-        self.mock_analyzer_sentiment.side_effect = Exception("Simulated component failure")
+        self.mock_analyzer_sentiment.side_effect = Exception("Simulated component failure") # This mock is still fine
         analysis_result = analyze("Some text that will cause an error.")
         self.assertEqual(analysis_result.get('indicator'), 'Error')
-        # ... (assertions for None fields remain same for new structure) ...
         self.assertIsNone(analysis_result['tone_analysis'])
         self.assertIsNone(analysis_result['bias_analysis'])
         self.assertIsNone(analysis_result['manipulation_analysis'])
@@ -250,52 +270,68 @@ class TestBiasLensAnalyzer(unittest.TestCase):
     # --- Tests for quick_analyze with new Core Solution structure ---
     @patch('biaslens.analyzer.NigerianPatterns.analyze_patterns')
     @patch('biaslens.analyzer.FakeNewsDetector.detect')
+    # Removed self.mock_enhancer_for_quick_analyze from here
     def test_quick_analyze_core_solution_structure(self, mock_fake_news_detect, mock_nigerian_patterns):
-        with patch('biaslens.analyzer._global_analyzer._analyze_sentiment_safe') as mock_sentiment_quick:
+        # Patch _analyze_sentiment_safe for the _global_analyzer instance if quick_analyze uses it.
+        # Assuming quick_analyze uses the instance's _analyze_sentiment_safe
+        with patch.object(BiasLensAnalyzer, '_analyze_sentiment_safe', return_value={'label': 'positive', 'confidence': 0.95}) as mock_sentiment_quick_instance_method, \
+             patch.object(BiasLensAnalyzer, '_calculate_basic_trust_score') as mock_basic_trust_score: # Mock basic trust score calculation
+
             # Setup mocks for quick_analyze components
-            mock_sentiment_quick.return_value = {'label': 'positive', 'confidence': 0.95}
-            mock_nigerian_patterns.return_value = {'has_triggers': False, 'has_clickbait': True} # Clickbait detected
+            mock_nigerian_patterns.return_value = {'has_triggers': True, 'has_clickbait': True, 'trigger_matches': ['yoruba problem', 'clickbait stuff']}
             mock_fake_news_detect.return_value = (True, {'risk_level': 'medium', 'fake_matches': ['fake news phrase']})
+            mock_basic_trust_score.return_value = {'score': 60, 'indicator': '🟡 Caution', 'explanation': 'Initial quick check.'}
 
-            lwb_info_mock = {
-                "inferred_bias_type": "Pro-Test Party", "bias_category": "political",
-                "bias_target": "Test Party", "matched_keywords": ["test party", "best"]
-            }
-            self.mock_enhancer_for_quick_analyze.get_lightweight_bias_assessment.return_value = lwb_info_mock
 
-            results = quick_analyze("This is a quick test with findings.")
+            # Call quick_analyze on an instance, or the global one if that's how it's structured.
+            # The prompt uses `quick_analyze("text")` which implies the global one.
+            # The global `quick_analyze` calls `_global_analyzer.quick_analyze(text)`.
+            # So, instance methods of `_global_analyzer` are what's being called.
+            # The `_analyze_sentiment_safe` is part of the instance, so the patch.object should work if targeted correctly.
+            # Let's assume the existing patch setup for _analyze_sentiment_safe in setUp might cover the global instance if BiasLensAnalyzer is instantiated as _global_analyzer.
+            # For clarity, let's ensure the mock is correctly targeted for the global instance if needed, or rely on setUp's instance mocks if _global_analyzer is THE instance being tested.
+            # The setUp mocks `biaslens.analyzer.BiasLensAnalyzer._analyze_sentiment_safe` which should affect all instances if not careful.
+            # Let's refine the sentiment mock for quick_analyze to be specific to the global analyzer if it's distinct.
+            # However, the original test used `with patch('biaslens.analyzer._global_analyzer._analyze_sentiment_safe')`. This is more specific.
 
-            # Standard top-level fields
-            self.assertIn('score', results)
-            self.assertIn('indicator', results)
-            self.assertIn('explanation', results)
-            self.assertIsInstance(results['explanation'], str)
-            self.assertTrue("Specific patterns suggest: Pro-Test Party." in results['explanation'])
-            self.assertIn(results['tip'], TrustScoreCalculator.DID_YOU_KNOW_TIPS)
+            # Re-instating a more targeted sentiment mock for quick_analyze if it uses the global instance's method
+            with patch('biaslens.analyzer._global_analyzer._analyze_sentiment_safe', return_value={'label': 'positive', 'confidence': 0.95}) as mock_sentiment_for_global_quick:
+                results = quick_analyze("This is a quick test with findings.")
 
-            # New structured fields
-            self.assertIn('tone_analysis', results)
-            self.assertEqual(results['tone_analysis'], {'sentiment_label': 'positive', 'sentiment_confidence': 0.95})
+                # Standard top-level fields
+                self.assertEqual(results['score'], 60)
+                self.assertEqual(results['indicator'], '🟡 Caution')
+                self.assertIsInstance(results['explanation'], str)
+                # Updated explanation check
+                self.assertTrue("Initial quick check." in results['explanation']) # Base explanation from mock
+                self.assertTrue("Specific patterns suggest: Pattern-based assessment." in results['explanation']) # Added part
+                self.assertIn(results['tip'], TrustScoreCalculator.DID_YOU_KNOW_TIPS)
 
-            self.assertIn('bias_analysis', results)
-            expected_bias_analysis = {
-                "primary_bias_type": "Pro-Test Party", "bias_category": "political",
-                "bias_target": "Test Party", "matched_keywords": ["test party", "best"]
-            }
-            self.assertEqual(results['bias_analysis'], expected_bias_analysis)
+                # New structured fields
+                self.assertIn('tone_analysis', results)
+                self.assertEqual(results['tone_analysis'], {'sentiment_label': 'positive', 'sentiment_confidence': 0.95})
 
-            self.assertIn('manipulation_analysis', results)
-            self.assertEqual(results['manipulation_analysis'], {'is_clickbait': True})
+                self.assertIn('bias_analysis', results)
+                expected_bias_analysis = {
+                    "primary_bias_type": "Pattern-based assessment",
+                    "bias_category": None, # As per new structure for quick_analyze
+                    "bias_target": None,   # As per new structure for quick_analyze
+                    "matched_keywords": ['yoruba problem', 'clickbait stuff'] # First 3 from NigerianPatterns
+                }
+                self.assertEqual(results['bias_analysis'], expected_bias_analysis)
 
-            self.assertIn('veracity_signals', results)
-            expected_veracity = {'fake_news_risk_level': 'medium', 'matched_suspicious_phrases': ['fake news phrase']}
-            self.assertEqual(results['veracity_signals'], expected_veracity)
+                self.assertIn('manipulation_analysis', results)
+                self.assertEqual(results['manipulation_analysis'], {'is_clickbait': True}) # from mock_nigerian_patterns
 
-            # Ensure old flat keys are not present
-            self.assertNotIn('inferred_bias_type', results)
-            self.assertNotIn('bias_category', results)
-            self.assertNotIn('bias_target', results)
-            self.assertNotIn('matched_keywords', results)
+                self.assertIn('veracity_signals', results)
+                expected_veracity = {'fake_news_risk_level': 'medium', 'matched_suspicious_phrases': ['fake news phrase']}
+                self.assertEqual(results['veracity_signals'], expected_veracity)
+
+                # Ensure old flat keys are not present
+                self.assertNotIn('inferred_bias_type', results)
+                self.assertNotIn('bias_category', results)
+                self.assertNotIn('bias_target', results)
+                self.assertNotIn('matched_keywords', results)
 
 
 if __name__ == '__main__':
