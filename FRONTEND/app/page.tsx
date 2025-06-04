@@ -250,7 +250,7 @@ export default function HomePage() {
                 <span className="accent-green font-bold">Stay sharp.</span>
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <button className="px-8 py-4 bg-white text-green-700 rounded-lg heading-font text-sm hover:bg-green-50 transition flex items-center justify-center font-bold">
+                {/* <button className="px-8 py-4 bg-white text-green-700 rounded-lg heading-font text-sm hover:bg-green-50 transition flex items-center justify-center font-bold">
                   Analyze Text
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-2" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -258,7 +258,20 @@ export default function HomePage() {
                 </button>
                 <button className="px-8 py-4 border border-green-100 text-neutral-100 rounded-lg heading-font text-sm hover:bg-green-800 transition font-semibold">
                   Watch Demo
-                </button>
+                </button> */}
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Link href="/auth/signup">
+               <Button size="lg" className="text-lg px-8 py-6">
+                 Get Started Free
+                 <ArrowRight className="ml-2 h-5 w-5" />
+               </Button>
+             </Link>
+             <Link href="/auth/signin">
+               <Button variant="outline" size="lg" className="text-lg px-8 py-6">
+                 Sign In
+               </Button>
+             </Link>
+          </div>
               </div>
             </div>
             <div className="absolute bottom-6 right-6 bg-green-800/80 backdrop-blur-sm rounded-lg px-4 py-3 z-10 border border-green-700">

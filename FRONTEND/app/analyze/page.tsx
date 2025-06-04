@@ -167,8 +167,7 @@ interface DeepAnalysisResult {
   detailed_sub_analyses?: DetailedSubAnalysesResult | null;
 }
 
-type AnalysisResultType = QuickAnalysisResult | DeepAnalysisResult | null;
-type AnalysisMode = "quick" | "deep" | null;
+type AnalysisResultType = DeepAnalysisResult | null;
 
 // readableKeyMap should be defined outside the component if it doesn't need access to component's state/props
 // or inside if it does, or passed as a prop. For this case, outside is fine.
@@ -241,7 +240,6 @@ export default function AnalyzePage() {
   const [text, setText] = useState("")
   const [analyzing, setAnalyzing] = useState(false)
   const [result, setResult] = useState<AnalysisResultType>(null)
-  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>(null)
   const [apiError, setApiError] = useState<string | null>(null)
   const { toast } = useToast()
   const router = useRouter()
@@ -351,34 +349,12 @@ export default function AnalyzePage() {
     }
   }, [user, authLoading, router])
 
-  const handleAnalyze = async () => { // This is for Quick Analysis
+  const handleAnalyze = async () => { // Changed from handleDeepAnalyze to handleAnalyze for simplicity
     if (!text.trim()) {
       toast({ title: "Error", description: "Please enter some text to analyze", variant: "destructive" })
       return
     }
-    setAnalyzing(true); setResult(null); setApiError(null); setAnalysisMode("quick");
-    try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-      const response = await fetch(`${apiBaseUrl}/quick_analyze`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.trim() }),
-      });
-      const responseData = await response.json();
-      if (!response.ok) throw new Error(responseData.detail || responseData.error || "Quick analysis failed");
-      setResult(responseData as QuickAnalysisResult);
-      toast({ title: "Quick Analysis Complete", description: "Text analyzed successfully!" });
-    } catch (error: any) {
-      console.error("Quick Analysis API Error:", error);
-      const errorMsg = error.message || "Failed to analyze text. Please try again.";
-      setApiError(errorMsg); toast({ title: "Error", description: errorMsg, variant: "destructive" });
-    } finally { setAnalyzing(false); }
-  }
-
-  const handleDeepAnalyze = async () => { // This is for Deep Analysis
-    if (!text.trim()) {
-      toast({ title: "Error", description: "Please enter some text to analyze", variant: "destructive" })
-      return
-    }
-    setAnalyzing(true); setResult(null); setApiError(null); setAnalysisMode("deep");
+    setAnalyzing(true); setResult(null); setApiError(null);
     try {
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
       const requestBody = { text: text.trim(), include_detailed_results: true, include_patterns: true, };
@@ -386,12 +362,12 @@ export default function AnalyzePage() {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody),
       });
       const responseData = await response.json();
-      if (!response.ok) throw new Error(responseData.detail || responseData.error || "Deep analysis failed");
+      if (!response.ok) throw new Error(responseData.detail || responseData.error || "Analysis failed");
       setResult(responseData as DeepAnalysisResult);
-      toast({ title: "Deep Analysis Complete", description: "Text deeply analyzed successfully!" });
+      toast({ title: "Analysis Complete", description: "Text analyzed successfully!" });
     } catch (error: any) {
-      console.error("Deep Analysis API Error:", error);
-      const errorMsg = error.message || "Failed to deeply analyze text. Please try again.";
+      console.error("Analysis API Error:", error);
+      const errorMsg = error.message || "Failed to analyze text. Please try again.";
       setApiError(errorMsg); toast({ title: "Error", description: errorMsg, variant: "destructive" });
     } finally { setAnalyzing(false); }
   }
@@ -402,13 +378,6 @@ export default function AnalyzePage() {
     if (score >= 40) return "text-yellow-600";
     return "text-red-600";
   }
-
-  // const getQualitativeAssessment = (score: number | null): string => {
-  //   if (score === null) return "Assessment: Not Available";
-  //   if (score >= 70) return "Assessment: Generally Trustworthy";
-  //   if (score >= 40) return "Assessment: Use Caution";
-  //   return "Assessment: Potential Issues Detected";
-  // };
 
   const renderSubDetail = (title: string, data: any, icon?: React.ReactNode, cardDescription?: string) => {
     if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
@@ -458,26 +427,6 @@ export default function AnalyzePage() {
     )
   }
 
-  const renderQuickAnalysisCoreDetails = (res: QuickAnalysisResult) => {
-    if (!res.tone_analysis && !res.bias_analysis && !res.manipulation_analysis && !res.veracity_signals) {
-      return null;
-    }
-    return (
-      <>
-        <h2 className="text-xl font-semibold mt-6 mb-3 border-b pb-1">Quick Insights Overview</h2>
-        <div className="grid md:grid-cols-2 gap-4">
-          {res.tone_analysis && renderSubDetail("Quick Tone", res.tone_analysis, <MessageSquare />)}
-          {/* Bias Analysis for Quick Mode uses LightweightNigerianBiasAssessmentModel directly */}
-          {res.bias_analysis && (res.bias_analysis.inferred_bias_type && res.bias_analysis.inferred_bias_type !== "No specific patterns detected" && res.bias_analysis.inferred_bias_type !== "Nigerian context detected, specific bias type unclear from patterns") &&
-            renderSubDetail("Quick Pattern Bias", res.bias_analysis, <Sparkles />)
-          }
-          {res.manipulation_analysis && renderSubDetail("Quick Manipulation", res.manipulation_analysis, <Fingerprint />)}
-          {res.veracity_signals && renderSubDetail("Quick Veracity", res.veracity_signals, <SearchCheck />)}
-        </div>
-      </>
-    )
-  }
-
   if (authLoading) { return ( <div className="flex items-center justify-center min-h-screen"> <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div> </div> ) }
   if (!user) { return null }
 
@@ -490,7 +439,7 @@ export default function AnalyzePage() {
           <Textarea placeholder="Paste your text here..." value={text} onChange={(e) => setText(e.target.value)} className="min-h-[200px] text-base border-gray-300 focus:border-primary" maxLength={10000} />
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <span className="text-sm text-muted-foreground">{text.length}/10000 characters</span>
-            <div className="flex gap-4"> <Button onClick={handleAnalyze} disabled={analyzing || !text.trim()} size="lg" variant="outline"> {analyzing && analysisMode === 'quick' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Quick Analysis </Button> <Button onClick={handleDeepAnalyze} disabled={analyzing || !text.trim()} size="lg"> {analyzing && analysisMode === 'deep' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Deep Analysis </Button> </div>
+            <Button onClick={handleAnalyze} disabled={analyzing || !text.trim()} size="lg"> {analyzing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Analyze Text </Button>
           </div>
         </CardContent>
       </Card>
@@ -500,18 +449,18 @@ export default function AnalyzePage() {
           <Card> {/* Overall Assessment Card */}
             <CardHeader> <CardTitle className="flex items-center gap-2"> <Gauge className="h-5 w-5 text-primary" /> Overall Assessment </CardTitle> </CardHeader>
             <CardContent className="space-y-4">
-              {((analysisMode === 'deep' && (result as DeepAnalysisResult).trust_score !== null) || (analysisMode === 'quick' && (result as QuickAnalysisResult).score !== null)) ? (
+              {(result as DeepAnalysisResult).trust_score !== null ? (
                 <>
                   <div className="flex items-center justify-between">
                     <span className="text-3xl font-bold">
-                      <span className={getTrustScoreColor(analysisMode === 'deep' ? (result as DeepAnalysisResult).trust_score : (result as QuickAnalysisResult).score)}>
-                        {(analysisMode === 'deep' ? (result as DeepAnalysisResult).trust_score : (result as QuickAnalysisResult).score)}%
+                      <span className={getTrustScoreColor((result as DeepAnalysisResult).trust_score)}>
+                        {(result as DeepAnalysisResult).trust_score}%
                       </span>
                       <span className="text-xl ml-1">Trust Score</span>
                     </span>
-                    <Badge variant={ (((analysisMode === 'deep' ? (result as DeepAnalysisResult).trust_score : (result as QuickAnalysisResult).score) ?? 0) >= 70 ? "default" : (((analysisMode === 'deep' ? (result as DeepAnalysisResult).trust_score : (result as QuickAnalysisResult).score) ?? 0) >= 40 ? "secondary" : "destructive")) }> {result.indicator || "N/A"} </Badge>
+                    <Badge variant={ (((result as DeepAnalysisResult).trust_score ?? 0) >= 70 ? "default" : (((result as DeepAnalysisResult).trust_score ?? 0) >= 40 ? "secondary" : "destructive")) }> {result.indicator || "N/A"} </Badge>
                   </div>
-                  <Progress value={(analysisMode === 'deep' ? (result as DeepAnalysisResult).trust_score : (result as QuickAnalysisResult).score)} className="h-3" />
+                  <Progress value={(result as DeepAnalysisResult).trust_score} className="h-3" />
                 </>
               ) : <p className="text-muted-foreground">Trust score not available.</p>}
               <div className="mt-4"> <h4 className="font-semibold mb-1">Explanation:</h4> {Array.isArray(result.explanation) ? (result.explanation as string[]).map((line, index) => <p key={index} className="text-muted-foreground leading-relaxed">{line}</p>) : <p className="text-muted-foreground leading-relaxed">{result.explanation || "No explanation provided."}</p> } </div>
@@ -520,16 +469,10 @@ export default function AnalyzePage() {
           </Card>
 
           {/* Render "Core Solution" details for Deep Analysis */}
-          {analysisMode === 'deep' && renderCoreSolutionDetails(result as DeepAnalysisResult)}
+          {renderCoreSolutionDetails(result as DeepAnalysisResult)}
 
-          {/* Render "Core Solution" details for Quick Analysis */}
-          {analysisMode === 'quick' && renderQuickAnalysisCoreDetails(result as QuickAnalysisResult)}
-
-          {/* Display LightweightNigerianBiasAssessment for Deep Analysis (if not covered by quick's bias_analysis)
-              Note: Quick mode's bias_analysis IS the LightweightNigerianBiasAssessment.
-              For Deep mode, it's a separate top-level field if patterns are included.
-          */}
-          {analysisMode === 'deep' && (result as DeepAnalysisResult).lightweight_nigerian_bias_assessment?.inferred_bias_type &&
+          {/* Display LightweightNigerianBiasAssessment for Deep Analysis */}
+          {(result as DeepAnalysisResult).lightweight_nigerian_bias_assessment?.inferred_bias_type &&
             (result as DeepAnalysisResult).lightweight_nigerian_bias_assessment?.inferred_bias_type !== "No specific patterns detected" &&
             (result as DeepAnalysisResult).lightweight_nigerian_bias_assessment?.inferred_bias_type !== "Nigerian context detected, specific bias type unclear from patterns" &&
           (
@@ -546,7 +489,7 @@ export default function AnalyzePage() {
             </Card>
           )}
 
-          {analysisMode === 'deep' && (result as DeepAnalysisResult).detailed_sub_analyses && (
+          {(result as DeepAnalysisResult).detailed_sub_analyses && (
             <>
               <h2 className="text-2xl font-semibold mt-8 mb-4 border-b pb-2">Detailed Sub-Analyses</h2>
               <div className="grid md:grid-cols-2 gap-6">
