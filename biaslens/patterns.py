@@ -109,36 +109,56 @@ class FakeNewsDetector:
     def detect(text: str) -> Tuple[bool, Dict]:
         """Enhanced fake news detection with scoring"""
         # Use compiled regex for fake news patterns
-        fake_matches = FakeNewsDetector._COMPILED_FAKE_PATTERNS.findall(text)
+        # This can return List[Union[str, Tuple[str,...]]]
+        raw_fake_matches_output = FakeNewsDetector._COMPILED_FAKE_PATTERNS.findall(text)
 
-        # Use compiled regex for credibility red flags
+        processed_fake_matches = []
+        if raw_fake_matches_output:
+            for match_item in raw_fake_matches_output:
+                actual_match_text = ""
+                if isinstance(match_item, tuple):
+                    # Find the first non-empty string in the tuple
+                    actual_match_text = next((s for s in match_item if s), "")
+                elif isinstance(match_item, str):
+                    actual_match_text = match_item
+
+                if actual_match_text:
+                    processed_fake_matches.append(actual_match_text)
+
+        # Use compiled regex for credibility red flags (this one correctly returns List[str])
         credibility_flags = FakeNewsDetector._COMPILED_CREDIBILITY_FLAGS.findall(text)
 
         # Calculate risk score
         total_words = len(text.split())
-        fake_score = (len(fake_matches) / max(total_words, 1)) * 100
-        credibility_score = (len(credibility_flags) / max(total_words, 1)) * 100
+        # Use length of processed_fake_matches for calculations
+        fake_score = (len(processed_fake_matches) / max(total_words, 1)) * 100 if total_words > 0 else 0
+        credibility_score = (len(credibility_flags) / max(total_words, 1)) * 100 if total_words > 0 else 0
 
-        # Determine overall risk
-        is_suspicious = len(fake_matches) > 0 or len(credibility_flags) > 1
+        # Determine overall risk using processed_fake_matches
+        is_suspicious = len(processed_fake_matches) > 0 or len(credibility_flags) > 1
 
-        # Risk level
-        if fake_score > 5 or credibility_score > 3:
+        # Risk level calculation also depends on the updated fake_score
+        if fake_score > 5 or credibility_score > 3: # threshold for high risk based on density
             risk_level = "high"
-        elif fake_score > 2 or credibility_score > 1:
+        elif fake_score > 2 or credibility_score > 1: # threshold for medium risk
             risk_level = "medium"
-        elif fake_score > 0 or credibility_score > 0:
+        elif len(processed_fake_matches) > 0 or len(credibility_flags) > 0: # any match means at least low risk
             risk_level = "low"
         else:
             risk_level = "minimal"
 
+        # If is_suspicious is True but risk_level is minimal (e.g. 1 credibility_flag and 0 fake_matches), adjust to low.
+        if is_suspicious and risk_level == "minimal":
+            risk_level = "low"
+
+
         return is_suspicious, {
-            "fake_matches": fake_matches,
+            "fake_matches": processed_fake_matches, # Use the processed list of strings
             "credibility_flags": credibility_flags,
             "fake_score": round(fake_score, 2),
             "credibility_score": round(credibility_score, 2),
             "risk_level": risk_level,
-            "total_flags": len(fake_matches) + len(credibility_flags)
+            "total_flags": len(processed_fake_matches) + len(credibility_flags) # Use length of processed list
         }
 
 

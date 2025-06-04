@@ -333,6 +333,85 @@ class TestBiasLensAnalyzer(unittest.TestCase):
                 self.assertNotIn('bias_target', results)
                 self.assertNotIn('matched_keywords', results)
 
+    @patch('biaslens.patterns.ViralityDetector.analyze_virality')
+    @patch('biaslens.patterns.NigerianPatterns.analyze_patterns')
+    def test_analyze_with_problematic_fake_news_patterns_no_typeerror(self, mock_nigerian_patterns, mock_virality_detector):
+        """
+        Tests that analyze() completes without TypeError when FakeNewsDetector processes patterns
+        that previously caused issues (due to list of tuples/strings).
+        This test allows the actual FakeNewsDetector.detect() and TrustScoreCalculator.calculate() to run.
+        """
+        test_text_with_fake_patterns = "breaking news: secret plan exposed. what they don't want you to know"
+
+        # Setup mocks for components not directly under test for this specific scenario
+        # Use class-level mocks for sentiment, emotion, new_bias_analyzer - they are set up to be neutral
+        self.mock_analyzer_sentiment.return_value = {'label': 'neutral', 'confidence': 0.9}
+        self.mock_analyzer_emotion.return_value = {'label': 'neutral', 'confidence': 0.8, 'is_emotionally_charged': False, 'manipulation_risk': 'low'}
+        self.mock_new_bias_analyzer_analyze.return_value = { # Neutral bias result
+            "overall_bias": {"is_biased": False, "confidence": 0.1, "level": "minimal"},
+            "bias_details": {"type": "neutral", "type_confidence": 0.95, "nigerian_context": False, "specific_detections": []},
+            "clickbait": {}, "recommendations": [], "technical_details": {}
+        }
+
+        # Mock sub-components of _analyze_patterns_safe, allowing FakeNewsDetector.detect to run
+        mock_nigerian_patterns.return_value = {'has_triggers': False, 'has_clickbait': False, 'trigger_matches': []}
+        mock_virality_detector.return_value = {'has_viral_patterns': False, 'viral_matches': [], 'viral_score': 0, 'manipulation_level': 'low'}
+
+        # Crucially, self.mock_analyzer_patterns (which mocks _analyze_patterns_safe) needs to be bypassed for FakeNewsDetector
+        # The patches above handle its sub-components.
+        # We also need _calculate_trust_score_safe to run its actual logic.
+        # So, we temporarily stop its mock from setUp and restore it later.
+        self.patcher_analyzer_trust_calc.stop() # Stop the mock for _calculate_trust_score_safe
+        self.patcher_analyzer_patterns.stop() # Stop the mock for _analyze_patterns_safe
+
+        try:
+            # Analyze the text
+            # The global analyze() function creates its own BiasLensAnalyzer instance.
+            # To test the instance methods with specific unmocked parts, we need to call it on self.analyzer or ensure global uses the same patches.
+            # For simplicity here, and since analyze() is a convenience wrapper, we'll test it directly.
+            # The patches on staticmethods (NigerianPatterns.analyze_patterns etc.) will apply regardless of instance.
+
+            result = analyze(test_text_with_fake_patterns, include_patterns=True, include_detailed_results=False)
+
+            # Primary assertion: No TypeError should have occurred. If it did, the test would fail before this.
+            self.assertIsNotNone(result, "Analysis result should not be None.")
+            self.assertNotEqual(result.get('indicator'), 'Error', f"Analysis returned an error: {result.get('explanation')}")
+
+            self.assertIsInstance(result.get('explanation'), list, "Explanation should be a list.")
+
+            # Check for expected fake news matches in the explanation (TrustScoreCalculator adds this)
+            # Expected matches from "breaking news: secret plan exposed. what they don't want you to know":
+            # "Breaking", "secret plan", "what they don't want you to know"
+            # The explanation formatting might vary, so check for key phrases.
+            explanation_text = " ".join(result.get('explanation', [])).lower()
+            self.assertIn("suspicious phrases", explanation_text, "Explanation should mention suspicious phrases.")
+            self.assertIn("breaking", explanation_text, "Explanation should contain 'breaking'.")
+            self.assertIn("secret plan", explanation_text, "Explanation should contain 'secret plan'.")
+            self.assertIn("what they don't want you to know", explanation_text, "Explanation should contain 'what they don't want you to know'.")
+
+            # Check that fake_matches in detailed_results (if requested) would be a list of strings
+            # This part requires include_detailed_results=True
+            detailed_result = analyze(test_text_with_fake_patterns, include_patterns=True, include_detailed_results=True)
+            self.assertIn('detailed_sub_analyses', detailed_result)
+            self.assertIn('patterns', detailed_result['detailed_sub_analyses'])
+            self.assertIn('fake_news', detailed_result['detailed_sub_analyses']['patterns'])
+            fake_news_details = detailed_result['detailed_sub_analyses']['patterns']['fake_news']
+            self.assertIn('fake_matches', fake_news_details)
+            self.assertIsInstance(fake_news_details['fake_matches'], list, "fake_matches should be a list.")
+            if fake_news_details['fake_matches']:
+                self.assertTrue(all(isinstance(match, str) for match in fake_news_details['fake_matches']), "All items in fake_matches should be strings.")
+
+            # Example: Check actual content of fake_matches if needed
+            expected_matches = ["Breaking", "secret plan", "what they don't want you to know"]
+            # Sort both for comparison if order doesn't matter, or check for subset/superset
+            self.assertTrue(set(expected_matches).issubset(set(fake_news_details['fake_matches'])))
+
+
+        finally:
+            # Restore the mocks
+            self.patcher_analyzer_trust_calc.start()
+            self.patcher_analyzer_patterns.start()
+
 
 if __name__ == '__main__':
     unittest.main()
