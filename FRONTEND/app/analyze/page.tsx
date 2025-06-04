@@ -176,6 +176,8 @@ export default function AnalyzePage() {
   const renderFieldValue = (originalKey: string, value: any, isNested: boolean = false): React.ReactNode => {
     // Keys to explicitly ignore
     const keysToIgnore: string[] = [
+      "primary_tone",
+      "source_of_primary_bias",
       "ml_model_confidence",
       "sentiment_confidence",
       "confidence", // Exact match for 'confidence'
