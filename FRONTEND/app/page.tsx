@@ -32,7 +32,8 @@ export default function HomePage() {
       <section className="text-center py-20">
         <div className="max-w-4xl mx-auto">
           <div className="flex justify-center mb-6">
-            <Brain className="h-16 w-16 text-primary" />
+            {/* <Brain className="h-16 w-16 text-primary" /> */}
+             <img src="/image-removebg-preview (5).png" alt="BiaLens Logo" className="h-14 w-50" />
           </div>
           <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
             Detect Bias with AI

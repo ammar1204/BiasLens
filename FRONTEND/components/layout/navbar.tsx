@@ -18,8 +18,10 @@ export function Navbar() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-            <Brain className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold">BiaLens</span>
+            {/* <Brain className="h-8 w-8 text-primary" /> */}
+            {/* <image src="/image-removebg-preview (2).png" alt="BiaLens Logo" className="h-8 w-8" /> */}
+            {/* <span className="text-xl font-bold">BiaLens</span> */}
+            <img src="/image-removebg-preview (3).png" alt="BiaLens Logo" className="h-12 w-17" />
           </Link>
 
           {/* Desktop Navigation */}
