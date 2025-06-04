@@ -77,79 +77,6 @@ interface LightweightNigerianBiasAssessmentModel {
   matched_keywords?: string[] | null;
 }
 
-// Interfaces for the content of `detailed_sub_analyses` (original full structures)
-interface SentimentDetail {
-  label: string;
-  confidence: number;
-  all_scores?: { negative?: number; neutral?: number; positive?: number; };
-  headline_comparison?: any;
-  error?: string;
-}
-
-interface EmotionDetail {
-  label: string;
-  confidence: number;
-  is_emotionally_charged?: boolean;
-  manipulation_risk?: string;
-  error?: string;
-}
-
-interface BiasTypeAnalysis {
-  type: string | null;
-  confidence: number | null;
-  [key: string]: any;
-}
-
-interface BiasDetail {
-  flag: boolean;
-  label: string | null;
-  type_analysis: BiasTypeAnalysis | null;
-  detected: boolean;
-  error?: string;
-}
-
-interface NigerianPatternsDetail {
-  has_triggers: boolean;
-  has_clickbait: boolean;
-  trigger_details?: string[] | Record<string, any>[];
-  clickbait_details?: string[] | Record<string, any>[];
-  error?: string;
-}
-
-interface FakeNewsDetail {
-  detected: boolean;
-  details?: {
-    risk_level?: string;
-    matched_phrases?: string[];
-    is_clickbait?: boolean;
-    [key: string]: any;
-  };
-  error?: string;
-}
-
-interface ViralManipulationDetail {
-  engagement_bait_score?: number;
-  sensationalism_score?: number;
-  is_potentially_viral?: boolean;
-  [key: string]: any;
-  error?: string;
-}
-
-interface PatternDetail {
-  nigerian_patterns: NigerianPatternsDetail | null;
-  fake_news: FakeNewsDetail | null;
-  viral_manipulation: ViralManipulationDetail | null;
-  error?: string;
-}
-
-interface DetailedSubAnalysesResult {
-  sentiment: SentimentDetail | null;
-  emotion: EmotionDetail | null;
-  bias: BiasDetail | null;
-  patterns?: PatternDetail | null;
-  lightweight_nigerian_bias?: LightweightNigerianBiasAssessmentModel | null;
-}
-
 // Main interface for Deep Analysis results - "Core Solution" Structure
 interface DeepAnalysisResult {
   trust_score: number | null;
@@ -163,8 +90,6 @@ interface DeepAnalysisResult {
   veracity_signals?: VeracitySignalsModel | null;
 
   lightweight_nigerian_bias_assessment?: LightweightNigerianBiasAssessmentModel | null;
-
-  detailed_sub_analyses?: DetailedSubAnalysesResult | null;
 }
 
 type AnalysisResultType = DeepAnalysisResult | null;
@@ -487,19 +412,6 @@ export default function AnalyzePage() {
                 )}
               </CardContent>
             </Card>
-          )}
-
-          {(result as DeepAnalysisResult).detailed_sub_analyses && (
-            <>
-              <h2 className="text-2xl font-semibold mt-8 mb-4 border-b pb-2">Detailed Sub-Analyses</h2>
-              <div className="grid md:grid-cols-2 gap-6">
-                {renderSubDetail("Sentiment Details (Full)", (result as DeepAnalysisResult).detailed_sub_analyses?.sentiment, <MessageSquare />)}
-                {renderSubDetail("Emotion Details (Full)", (result as DeepAnalysisResult).detailed_sub_analyses?.emotion, <Zap />)}
-                {renderSubDetail("Bias Details (Full ML)", (result as DeepAnalysisResult).detailed_sub_analyses?.bias, <EyeOff />)}
-                {(result as DeepAnalysisResult).detailed_sub_analyses?.patterns && renderSubDetail("Pattern Details (Full)", (result as DeepAnalysisResult).detailed_sub_analyses?.patterns, <Newspaper />)}
-                {(result as DeepAnalysisResult).detailed_sub_analyses?.lightweight_nigerian_bias && renderSubDetail("Lightweight Nigerian Bias (Full)", (result as DeepAnalysisResult).detailed_sub_analyses?.lightweight_nigerian_bias, <Sparkles />)}
-              </div>
-            </>
           )}
         </div>
       )}
