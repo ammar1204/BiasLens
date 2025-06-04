@@ -224,7 +224,7 @@ class BiasLensAnalyzer:
             return {
                 **default_error_payload,
                 'explanation': [f"An error occurred during analysis: {str(e)}"],
-                'tip': "Analysis failed due to an unexpected error. Please try again later or contact support."
+                'tip': "Analysis failed due to an unexpected error. Please try again later or contact support."}
     def analyze_headline_content_mismatch(self, headline: str, content: str) -> Dict:
         """
         Specialized analysis for detecting clickbait through headline-content mismatch.
