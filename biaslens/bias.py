@@ -1,281 +1,393 @@
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 from .utils import _model_cache
+import re
+from typing import Dict, List, Tuple, Optional
+from dataclasses import dataclass
+from enum import Enum
 
 
-class NigerianBiasEnhancer:
+class BiasLevel(Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class BiasCategory(Enum):
+    POLITICAL = "political"
+    ETHNIC = "ethnic"
+    RELIGIOUS = "religious"
+    REGIONAL = "regional"
+    GENDER = "gender"
+    SOCIAL = "social"
+
+
+@dataclass
+class BiasDetection:
+    term: str
+    category: BiasCategory
+    bias_level: BiasLevel
+    confidence: float
+    context: str
+    bias_direction: str  # positive, negative, neutral
+    explanation: str
+
+
+@dataclass
+class ContextualPattern:
+    term: str
+    neutral_contexts: List[str]
+    biased_contexts: List[str]
+    requires_context: bool = True
+
+
+class NigerianContextAnalyzer:
+    """Enhanced Nigerian context analyzer with false positive reduction"""
+    
     def __init__(self):
-        # Nigerian-specific bias indicators
-        self.nigerian_patterns = {
-            "political": {
-                "parties": ["apc", "pdp", "labour party", "nnpp", "apga", "buhari", "tinubu", "atiku", "obi"],
-                "regions": ["north", "south", "middle belt", "core north", "arewa", "biafra"],
-                "bias_terms": ["northerner", "southerner", "cabals", "fulani agenda", "igbo agenda", "yoruba agenda"]
+        # Context-aware patterns to reduce false positives
+        self.contextual_patterns = {
+            BiasCategory.POLITICAL: {
+                # Political parties - context matters
+                "apc": ContextualPattern(
+                    term="apc",
+                    neutral_contexts=["apc government", "apc policy", "apc announced", "apc said"],
+                    biased_contexts=["apc failure", "corrupt apc", "useless apc", "apc cabal"]
+                ),
+                "pdp": ContextualPattern(
+                    term="pdp",
+                    neutral_contexts=["pdp statement", "pdp candidate", "former pdp", "pdp government"],
+                    biased_contexts=["failed pdp", "corrupt pdp", "pdp disaster", "evil pdp"]
+                ),
+                "labour party": ContextualPattern(
+                    term="labour party",
+                    neutral_contexts=["labour party candidate", "labour party rally", "lp spokesperson"],
+                    biased_contexts=["fake labour party", "labour party lies", "deceptive labour"]
+                ),
+                # Politicians
+                "tinubu": ContextualPattern(
+                    term="tinubu",
+                    neutral_contexts=["president tinubu", "tinubu administration", "tinubu announced"],
+                    biased_contexts=["corrupt tinubu", "evil tinubu", "dictator tinubu", "failed tinubu"]
+                ),
+                "obi": ContextualPattern(
+                    term="obi",
+                    neutral_contexts=["peter obi", "obi campaign", "obi supporters", "mr obi"],
+                    biased_contexts=["fake obi", "fraud obi", "liar obi", "deceiver obi"]
+                ),
+                "atiku": ContextualPattern(
+                    term="atiku",
+                    neutral_contexts=["atiku abubakar", "former vp atiku", "atiku campaign"],
+                    biased_contexts=["corrupt atiku", "failed atiku", "evil atiku"]
+                ),
+                "buhari": ContextualPattern(
+                    term="buhari",
+                    neutral_contexts=["former president buhari", "buhari administration", "president buhari"],
+                    biased_contexts=["failed buhari", "dictator buhari", "clueless buhari"]
+                )
             },
-            "ethnic": {
-                "groups": ["yoruba", "igbo", "hausa", "fulani", "ijaw", "kanuri", "tiv", "edo", "efik"],
-                "stereotypes": ["lazy", "greedy", "violent", "dominating", "cunning", "fraudulent"],
-                "derogatory": ["aboki", "nyamiri", "gambari", "omo ale", "kafir"]
+            
+            BiasCategory.ETHNIC: {
+                # Ethnic groups - geographic context matters
+                "yoruba": ContextualPattern(
+                    term="yoruba",
+                    neutral_contexts=["yoruba language", "yoruba culture", "yoruba people", "yoruba land", "yoruba history"],
+                    biased_contexts=["yoruba domination", "yoruba agenda", "greedy yoruba", "cunning yoruba"]
+                ),
+                "igbo": ContextualPattern(
+                    term="igbo",
+                    neutral_contexts=["igbo language", "igbo culture", "igbo people", "igbo land", "ndi igbo"],
+                    biased_contexts=["igbo agenda", "greedy igbo", "fraudulent igbo", "criminal igbo"]
+                ),
+                "hausa": ContextualPattern(
+                    term="hausa",
+                    neutral_contexts=["hausa language", "hausa culture", "hausa people", "hausa land"],
+                    biased_contexts=["hausa domination", "violent hausa", "backward hausa", "primitive hausa"]
+                ),
+                "fulani": ContextualPattern(
+                    term="fulani",
+                    neutral_contexts=["fulani culture", "fulani people", "fulani community"],
+                    biased_contexts=["fulani herdsmen terrorists", "killer fulani", "violent fulani", "fulani invasion"]
+                ),
+                # Highly derogatory terms - always biased
+                "nyamiri": ContextualPattern(
+                    term="nyamiri",
+                    neutral_contexts=[],  # No neutral contexts for slurs
+                    biased_contexts=["nyamiri"],
+                    requires_context=False
+                ),
+                "aboki": ContextualPattern(
+                    term="aboki",
+                    neutral_contexts=["my aboki", "aboki friend"],  # Can be friendly in some contexts
+                    biased_contexts=["stupid aboki", "illiterate aboki", "these aboki people"]
+                ),
+                "gambari": ContextualPattern(
+                    term="gambari",
+                    neutral_contexts=[],
+                    biased_contexts=["gambari"],
+                    requires_context=False
+                )
             },
-            "religious": {
-                "groups": ["christian", "muslim", "catholic", "pentecostal", "orthodox", "sunni", "shia"],
-                "bias_terms": ["infidel", "kafir", "pagan", "fundamentalist", "jihadist", "crusader"],
-                "contexts": ["sharia", "christmas", "eid", "crusade", "jihad", "persecution"]
+            
+            BiasCategory.REGIONAL: {
+                # Regional terms - geographic context is crucial
+                "north": ContextualPattern(
+                    term="north",
+                    neutral_contexts=["north nigeria", "northern region", "north east", "north west", "north central", 
+                                    "going north", "north of lagos", "northern states", "from the north"],
+                    biased_contexts=["backward north", "primitive north", "north domination", "northern agenda",
+                                   "lazy northerners", "illiterate north"]
+                ),
+                "south": ContextualPattern(
+                    term="south",
+                    neutral_contexts=["south nigeria", "southern region", "south east", "south west", "south south",
+                                    "going south", "south of abuja", "southern states", "from the south"],
+                    biased_contexts=["greedy south", "south domination", "southern agenda", "cunning southerners"]
+                ),
+                "arewa": ContextualPattern(
+                    term="arewa",
+                    neutral_contexts=["arewa community", "arewa youth", "arewa forum", "arewa consultative"],
+                    biased_contexts=["arewa domination", "arewa supremacy", "arewa against others"]
+                ),
+                "biafra": ContextualPattern(
+                    term="biafra",
+                    neutral_contexts=["biafra history", "biafra war", "former biafra", "biafra memorial"],
+                    biased_contexts=["biafra must go", "biafra terrorists", "illegal biafra", "biafra criminals"]
+                )
+            },
+            
+            BiasCategory.RELIGIOUS: {
+                "christian": ContextualPattern(
+                    term="christian",
+                    neutral_contexts=["christian community", "christian faith", "christian church", "christian worship"],
+                    biased_contexts=["christian domination", "fake christians", "christian agenda", "evil christians"]
+                ),
+                "muslim": ContextualPattern(
+                    term="muslim",
+                    neutral_contexts=["muslim community", "muslim faith", "muslim worship", "islamic prayer"],
+                    biased_contexts=["muslim terrorists", "islamic agenda", "muslim domination", "violent muslims"]
+                ),
+                # Religious slurs - always biased
+                "kafir": ContextualPattern(
+                    term="kafir",
+                    neutral_contexts=[],
+                    biased_contexts=["kafir"],
+                    requires_context=False
+                ),
+                "infidel": ContextualPattern(
+                    term="infidel",
+                    neutral_contexts=[],
+                    biased_contexts=["infidel"],
+                    requires_context=False
+                )
             }
         }
+        
+        # Enhanced sentiment analysis with Nigerian context
+        self.sentiment_indicators = {
+            "strong_negative": ["corrupt", "evil", "terrorist", "criminal", "fraud", "useless", "disaster", 
+                              "failure", "incompetent", "clueless", "dictator", "killer", "violent", "primitive", 
+                              "backward", "illiterate", "lazy", "greedy", "cunning", "fake", "liar", "deceiver"],
+            "moderate_negative": ["bad", "poor", "failed", "disappointing", "questionable", "problematic", 
+                                "concerning", "divisive", "controversial", "wrong", "terrible"],
+            "mild_negative": ["doubtful", "uncertain", "unclear", "confusing", "odd", "strange"],
+            "neutral": ["said", "announced", "stated", "reported", "mentioned", "discussed", "explained"],
+            "mild_positive": ["okay", "fine", "decent", "reasonable", "acceptable", "fair"],
+            "moderate_positive": ["good", "nice", "solid", "reliable", "trustworthy", "capable", "competent"],
+            "strong_positive": ["excellent", "amazing", "great", "wonderful", "brilliant", "outstanding", 
+                              "exceptional", "perfect", "best", "love", "support"]
+        }
 
-    def detect_nigerian_context(self, text):
-        """Quick Nigerian context detection"""
+    def analyze_text(self, text: str) -> List[BiasDetection]:
+        """Main analysis method with comprehensive bias detection"""
         text_lower = text.lower()
-        matches = []
+        detections = []
+        
+        # Check each category
+        for category, patterns in self.contextual_patterns.items():
+            category_detections = self._analyze_category(text_lower, text, category, patterns)
+            detections.extend(category_detections)
+        
+        # Remove duplicates and rank by confidence
+        detections = self._deduplicate_and_rank(detections)
+        
+        return detections
 
-        for category, subcategories in self.nigerian_patterns.items():
-            for subcat, terms in subcategories.items():
-                for term in terms:
-                    if term in text_lower:
-                        matches.append({
-                            "category": category,
-                            "subcategory": subcat,
-                            "term": term,
-                            "bias_level": self._assess_bias_level(subcat)
-                        })
+    def _analyze_category(self, text_lower: str, original_text: str, category: BiasCategory, 
+                         patterns: Dict[str, ContextualPattern]) -> List[BiasDetection]:
+        """Analyze text for a specific bias category"""
+        detections = []
+        
+        for term, pattern in patterns.items():
+            if self._term_exists_in_text(text_lower, term):
+                detection = self._analyze_term_context(
+                    text_lower, original_text, term, pattern, category
+                )
+                if detection:
+                    detections.append(detection)
+        
+        return detections
 
-        return matches
+    def _term_exists_in_text(self, text: str, term: str) -> bool:
+        """Check if term exists with word boundary consideration"""
+        # Use word boundaries to avoid partial matches
+        pattern = r'\b' + re.escape(term) + r'\b'
+        return bool(re.search(pattern, text, re.IGNORECASE))
 
-    def _assess_bias_level(self, subcategory):
-        """Quick bias level assessment"""
-        if subcategory in ["derogatory", "bias_terms"]:
-            return "high"
-        elif subcategory in ["stereotypes"]:
-            return "medium"
-        else:
-            return "low"
-
-    def enhance_bias_score(self, original_score, nigerian_matches):
-        """Boost bias score if Nigerian context detected"""
-        if not nigerian_matches:
-            return original_score, []
-
-        # Calculate boost based on matches
-        boost = 0
-        for match in nigerian_matches:
-            if match["bias_level"] == "high":
-                boost += 0.3
-            elif match["bias_level"] == "medium":
-                boost += 0.2
-            else:
-                boost += 0.1
-
-        # Cap the boost and combine with original
-        boost = min(boost, 0.5)
-        enhanced_score = min(original_score + boost, 1.0)
-
-        return enhanced_score, nigerian_matches
-
-    def _determine_bias_direction_lightweight(self, text, term):
-        """Determine if bias is positive or negative toward the term (lightweight version)"""
-        negative_indicators = ["bad", "terrible", "corrupt", "evil", "worst", "hate", "destroy", "useless",
-                               "incompetent"]
-        positive_indicators = ["good", "great", "best", "love", "excellent", "amazing", "support", "vote"]
-
-        # Look for sentiment words near the term
-        words = text.lower().split() # Ensure text is lowercased here as well
-        term_lower = term.lower()
-        term_index = -1
-        for i, word in enumerate(words):
-            if term_lower in word: # Compare with term_lower
-                term_index = i
-                break
-
-        if term_index == -1:
-            return "neutral"
-
-        # Check words around the term (±3 words)
-        context_start = max(0, term_index - 3)
-        context_end = min(len(words), term_index + 4)
-        context_words = words[context_start:context_end]
-
-        negative_count = sum(1 for word in context_words if any(neg in word for neg in negative_indicators))
-        positive_count = sum(1 for word in context_words if any(pos in word for pos in positive_indicators))
-
-        if negative_count > positive_count:
-            return "negative"
-        elif positive_count > negative_count:
-            return "positive"
-        else:
-            return "neutral"
-
-    def _generate_specific_bias_type_lightweight(self, nigerian_matches, text):
-        """Generate specific bias type based on detected Nigerian context (lightweight version)"""
-        if not nigerian_matches:
-            return None
-
-        text_lower = text.lower() # Already done by caller, but good for safety
-
-        # Check for specific political party bias
-        political_parties = {
-            "apc": "APC political bias",
-            "pdp": "PDP political bias",
-            "labour party": "Labour Party political bias",
-            "obi": "Peter Obi political bias",
-            "tinubu": "Tinubu political bias",
-            "atiku": "Atiku political bias",
-            "buhari": "Buhari political bias"
-        }
-
-        # Check for specific ethnic bias
-        ethnic_groups = {
-            "yoruba": "Anti-Yoruba ethnic bias",
-            "igbo": "Anti-Igbo ethnic bias",
-            "hausa": "Anti-Hausa ethnic bias",
-            "fulani": "Anti-Fulani ethnic bias",
-            "ijaw": "Anti-Ijaw ethnic bias",
-            "aboki": "Anti-Northern ethnic bias", # Often derogatory towards Hausa/Fulani
-            "nyamiri": "Anti-Igbo ethnic bias", # Derogatory
-            "gambari": "Anti-Hausa ethnic bias" # Often derogatory
-        }
-
-        # Check for specific religious bias
-        religious_groups = {
-            "christian": "Anti-Christian religious bias",
-            "muslim": "Anti-Muslim religious bias",
-            "sharia": "Anti-Islamic religious bias", # Can be context-dependent
-            "jihad": "Anti-Islamic religious bias", # Can be context-dependent
-            "crusade": "Anti-Christian religious bias", # Can be context-dependent
-            "infidel": "Religious intolerance bias",
-            "kafir": "Anti-Christian religious bias" # Derogatory in some contexts
-        }
-
-        # Check for regional bias
-        regional_terms = {
-            "north": "Anti-Northern regional bias",
-            "south": "Anti-Southern regional bias",
-            "northerner": "Anti-Northern regional bias",
-            "southerner": "Anti-Southern regional bias",
-            "arewa": "Pro-Northern regional bias", # Can be neutral or pro
-            "biafra": "Pro-Biafran regional bias" # Can be neutral or pro
-        }
-
-        matched_keywords_for_result = []
-
-        # Look for specific matches and determine bias direction
-        # Prioritize more specific/derogatory terms if multiple matches exist
-        # This simple loop takes the first match, might need refinement for multiple complex matches
-        for match in nigerian_matches:
-            term = match['term'] # This is already lowercased from detect_nigerian_context
-            matched_keywords_for_result.append(term)
-
-            # Check political bias
-            if term in political_parties:
-                bias_direction = self._determine_bias_direction_lightweight(text_lower, term)
-                # Default to the mapping, then adjust based on sentiment
-                specific_type = political_parties[term]
-                target_term = term.upper()
-                if "obi" in term: target_term = "Peter Obi" # Proper Noun
-                if "tinubu" in term: target_term = "Tinubu"
-                if "atiku" in term: target_term = "Atiku"
-                if "buhari" in term: target_term = "Buhari"
-
-
-                if bias_direction == "negative":
-                    specific_type = f"Anti-{target_term} political bias"
-                elif bias_direction == "positive":
-                    specific_type = f"Pro-{target_term} political bias"
-                # if neutral, it keeps the default from political_parties (e.g. "APC political bias")
-
-                return {
-                    "inferred_bias_type": specific_type,
-                    "bias_target": target_term,
-                    "bias_category": "political",
-                    "matched_keywords": [term] # Return the specific term that triggered this
-                }
-
-            # Check ethnic bias (derogatory terms often imply anti-bias)
-            if term in ethnic_groups:
-                target_ethnic_group = term.capitalize()
-                if term == "nyamiri": target_ethnic_group = "Igbo"
-                elif term == "aboki": target_ethnic_group = "Hausa/Fulani" # General term for Northerners
-                elif term == "gambari": target_ethnic_group = "Hausa"
-
-                # For derogatory terms, it's almost always "Anti-"
-                # For neutral group terms, it might need sentiment analysis, but the map already implies "Anti-"
-                # This logic assumes the predefined map is correct for general cases.
-                return {
-                    "inferred_bias_type": ethnic_groups[term],
-                    "bias_target": target_ethnic_group,
-                    "bias_category": "ethnic",
-                    "matched_keywords": [term]
-                }
-
-            # Check religious bias
-            if term in religious_groups:
-                target_religious_group = term.capitalize()
-                # Similar to ethnic, derogatory/contextual terms often imply direction
-                # E.g. "kafir" implies anti-other, "jihad" in certain contexts implies anti-other
-                return {
-                    "inferred_bias_type": religious_groups[term],
-                    "bias_target": target_religious_group,
-                    "bias_category": "religious",
-                    "matched_keywords": [term]
-                }
-
-            # Check regional bias
-            if term in regional_terms:
-                target_region = term.capitalize()
-                # Sentiment might be needed for terms like "north", "south" if not already directional
-                # "Arewa" and "Biafra" are often pro their respective contexts
-                return {
-                    "inferred_bias_type": regional_terms[term],
-                    "bias_target": target_region,
-                    "bias_category": "regional",
-                    "matched_keywords": [term]
-                }
-
-        # If loop completes without returning, means no specific pattern was matched from the first term
-        # or the term didn't fall into these specific categories
-        if matched_keywords_for_result: # If there were matches, but not specific enough for above
-             return {
-                "inferred_bias_type": "Nigerian context detected, specific bias type unclear from patterns",
-                "bias_category": nigerian_matches[0]['category'] if nigerian_matches else None, # Category of the first match
-                "bias_target": None,
-                "matched_keywords": matched_keywords_for_result
-            }
+    def _analyze_term_context(self, text_lower: str, original_text: str, term: str, 
+                            pattern: ContextualPattern, category: BiasCategory) -> Optional[BiasDetection]:
+        """Analyze the context around a detected term"""
+        
+        # For terms that don't require context (slurs), always flag as biased
+        if not pattern.requires_context:
+            return BiasDetection(
+                term=term,
+                category=category,
+                bias_level=BiasLevel.HIGH,
+                confidence=0.95,
+                context=self._extract_context(text_lower, term),
+                bias_direction="negative",
+                explanation=f"Contains derogatory term '{term}' which is inherently biased"
+            )
+        
+        # Check for neutral contexts first
+        for neutral_context in pattern.neutral_contexts:
+            if neutral_context in text_lower:
+                # Even in neutral context, check for bias indicators
+                context_window = self._extract_context(text_lower, term, window_size=10)
+                bias_score, direction = self._calculate_sentiment_score(context_window, term)
+                
+                if abs(bias_score) < 0.3:  # Truly neutral
+                    return None
+                elif abs(bias_score) < 0.6:  # Mild bias in neutral context
+                    return BiasDetection(
+                        term=term,
+                        category=category,
+                        bias_level=BiasLevel.LOW,
+                        confidence=0.4,
+                        context=context_window,
+                        bias_direction=direction,
+                        explanation=f"Mild bias detected around '{term}' despite neutral context"
+                    )
+        
+        # Check for explicitly biased contexts
+        for biased_context in pattern.biased_contexts:
+            if biased_context in text_lower:
+                return BiasDetection(
+                    term=term,
+                    category=category,
+                    bias_level=BiasLevel.HIGH,
+                    confidence=0.9,
+                    context=self._extract_context(text_lower, term),
+                    bias_direction="negative",
+                    explanation=f"Explicitly biased language: '{biased_context}'"
+                )
+        
+        # General context analysis
+        context_window = self._extract_context(text_lower, term, window_size=8)
+        bias_score, direction = self._calculate_sentiment_score(context_window, term)
+        
+        if abs(bias_score) >= 0.7:
+            return BiasDetection(
+                term=term,
+                category=category,
+                bias_level=BiasLevel.HIGH,
+                confidence=min(abs(bias_score), 0.95),
+                context=context_window,
+                bias_direction=direction,
+                explanation=f"Strong {direction} bias detected around '{term}'"
+            )
+        elif abs(bias_score) >= 0.4:
+            return BiasDetection(
+                term=term,
+                category=category,
+                bias_level=BiasLevel.MEDIUM,
+                confidence=abs(bias_score),
+                context=context_window,
+                bias_direction=direction,
+                explanation=f"Moderate {direction} bias detected around '{term}'"
+            )
+        
         return None
 
+    def _extract_context(self, text: str, term: str, window_size: int = 6) -> str:
+        """Extract context window around the term"""
+        words = text.split()
+        term_positions = [i for i, word in enumerate(words) if term in word.lower()]
+        
+        if not term_positions:
+            return ""
+        
+        # Use the first occurrence for context
+        pos = term_positions[0]
+        start = max(0, pos - window_size)
+        end = min(len(words), pos + window_size + 1)
+        
+        return " ".join(words[start:end])
 
-    def get_lightweight_bias_assessment(self, text: str) -> dict:
-        nigerian_matches = self.detect_nigerian_context(text)
-
-        if not nigerian_matches:
-            return {
-                "inferred_bias_type": "No specific patterns detected",
-                "bias_category": None,
-                "bias_target": None,
-                "matched_keywords": []
-            }
-
-        # Get all matched keywords from the initial detection
-        all_detected_keywords = [match['term'] for match in nigerian_matches]
-
-        inferred_bias_details = self._generate_specific_bias_type_lightweight(nigerian_matches, text)
-
-        if inferred_bias_details:
-            # Ensure all initially detected keywords are included if a specific bias is found
-            inferred_bias_details["matched_keywords"] = list(set(inferred_bias_details.get("matched_keywords", []) + all_detected_keywords))
-            return inferred_bias_details
+    def _calculate_sentiment_score(self, context: str, target_term: str) -> Tuple[float, str]:
+        """Calculate sentiment score for the context around target term"""
+        words = context.lower().split()
+        score = 0.0
+        
+        # Weight sentiment words by distance from target term
+        target_positions = [i for i, word in enumerate(words) if target_term in word]
+        
+        if not target_positions:
+            return 0.0, "neutral"
+        
+        target_pos = target_positions[0]
+        
+        for i, word in enumerate(words):
+            distance = abs(i - target_pos)
+            weight = max(0.1, 1.0 - (distance * 0.15))  # Closer words have higher weight
+            
+            # Clean word of punctuation
+            clean_word = re.sub(r'[^\w]', '', word)
+            
+            if clean_word in self.sentiment_indicators["strong_negative"]:
+                score -= 1.0 * weight
+            elif clean_word in self.sentiment_indicators["moderate_negative"]:
+                score -= 0.6 * weight
+            elif clean_word in self.sentiment_indicators["mild_negative"]:
+                score -= 0.3 * weight
+            elif clean_word in self.sentiment_indicators["mild_positive"]:
+                score += 0.3 * weight
+            elif clean_word in self.sentiment_indicators["moderate_positive"]:
+                score += 0.6 * weight
+            elif clean_word in self.sentiment_indicators["strong_positive"]:
+                score += 1.0 * weight
+        
+        # Normalize by context length
+        normalized_score = score / max(len(words), 1)
+        
+        if normalized_score < -0.1:
+            return normalized_score, "negative"
+        elif normalized_score > 0.1:
+            return normalized_score, "positive"
         else:
-            # This case should ideally be handled by the updated _generate_specific_bias_type_lightweight
-            # returning a generic assessment if nigerian_matches is not empty.
-            # However, as a fallback:
-            return {
-                "inferred_bias_type": "Nigerian context detected, specific bias type unclear from patterns",
-                "bias_category": nigerian_matches[0]['category'] if nigerian_matches else None,
-                "bias_target": None,
-                "matched_keywords": all_detected_keywords
-            }
+            return normalized_score, "neutral"
+
+    def _deduplicate_and_rank(self, detections: List[BiasDetection]) -> List[BiasDetection]:
+        """Remove duplicates and rank by confidence"""
+        # Remove duplicates based on term and category
+        seen = set()
+        unique_detections = []
+        
+        for detection in detections:
+            key = (detection.term, detection.category)
+            if key not in seen:
+                seen.add(key)
+                unique_detections.append(detection)
+        
+        # Sort by confidence (highest first)
+        return sorted(unique_detections, key=lambda x: x.confidence, reverse=True)
 
 
-class BiasDetector:
-    def __init__(self, model_name="martin-ha/toxic-comment-model", threshold=0.6):
+class EnhancedBiasDetector:
+    """Enhanced bias detector with Nigerian context awareness"""
+    
+    def __init__(self, model_name="martin-ha/toxic-comment-model", threshold=0.5):
+        # Load base model
         if model_name not in _model_cache:
             tokenizer = AutoTokenizer.from_pretrained(model_name)
             model = AutoModelForSequenceClassification.from_pretrained(model_name)
@@ -285,91 +397,200 @@ class BiasDetector:
                 "model": model,
                 "pipeline": pipe
             }
+        
         self.pipeline = _model_cache[model_name]["pipeline"]
         self.threshold = threshold
-        self.nigerian_enhancer = NigerianBiasEnhancer()
+        self.nigerian_analyzer = NigerianContextAnalyzer()
 
-    def detect(self, text):
+    def detect(self, text: str) -> Dict:
+        """Main detection method with comprehensive analysis"""
         try:
-            result = self.pipeline(text)[0]
-
-            # Handle different model outputs - some return TOXIC/NOT_TOXIC, others return scores
-            if result['label'] in ['TOXIC', 'BIASED', '1']:
-                bias_score = result['score']
+            # Base model detection
+            base_result = self.pipeline(text)[0]
+            
+            # Handle different model outputs
+            if base_result['label'] in ['TOXIC', 'BIASED', '1']:
+                base_score = base_result['score']
             else:
-                bias_score = 1 - result['score']  # Invert if label is negative
-
-            # Add Nigerian enhancement
-            nigerian_matches = self.nigerian_enhancer.detect_nigerian_context(text)
-            enhanced_score, _ = self.nigerian_enhancer.enhance_bias_score(bias_score, nigerian_matches)
-
-            if enhanced_score >= self.threshold:
-                confidence_level = "High" if enhanced_score >= 0.8 else "Medium"
-                context_info = " (Nigerian context detected)" if nigerian_matches else ""
-                return True, f"Potentially Biased - {confidence_level} Confidence ({enhanced_score:.3f}){context_info}"
-            else:
-                return False, f"Likely Neutral (confidence: {1 - enhanced_score:.3f})"
-
+                base_score = 1 - base_result['score']
+            
+            # Nigerian context analysis
+            nigerian_detections = self.nigerian_analyzer.analyze_text(text)
+            
+            # Combine scores intelligently
+            final_score, explanation = self._combine_scores(base_score, nigerian_detections)
+            
+            # Generate comprehensive report
+            return {
+                "is_biased": final_score >= self.threshold,
+                "confidence": final_score,
+                "bias_level": self._determine_bias_level(final_score),
+                "base_model_score": base_score,
+                "nigerian_detections": [
+                    {
+                        "term": d.term,
+                        "category": d.category.value,
+                        "bias_level": d.bias_level.value,
+                        "confidence": d.confidence,
+                        "direction": d.bias_direction,
+                        "explanation": d.explanation,
+                        "context": d.context
+                    }
+                    for d in nigerian_detections
+                ],
+                "explanation": explanation,
+                "recommendations": self._generate_recommendations(nigerian_detections)
+            }
+        
         except Exception as e:
-            # Fallback in case of model errors
-            return False, f"Analysis Error: {str(e)}"
+            return {
+                "is_biased": False,
+                "confidence": 0.0,
+                "error": f"Analysis failed: {str(e)}",
+                "nigerian_detections": [],
+                "explanation": "Technical error occurred during analysis"
+            }
+
+    def _combine_scores(self, base_score: float, detections: List[BiasDetection]) -> Tuple[float, str]:
+        """Intelligently combine base model score with Nigerian detections"""
+        if not detections:
+            return base_score, f"Base model analysis (confidence: {base_score:.3f})"
+        
+        # Calculate enhancement from Nigerian context
+        nigerian_boost = 0.0
+        high_confidence_detections = []
+        
+        for detection in detections:
+            if detection.confidence >= 0.7:
+                high_confidence_detections.append(detection)
+                if detection.bias_level == BiasLevel.HIGH:
+                    nigerian_boost += 0.3
+                elif detection.bias_level == BiasLevel.MEDIUM:
+                    nigerian_boost += 0.2
+                else:
+                    nigerian_boost += 0.1
+        
+        # Cap the boost
+        nigerian_boost = min(nigerian_boost, 0.4)
+        
+        # Combine scores with weighted average if both are significant
+        if base_score >= 0.3 and nigerian_boost >= 0.1:
+            # Both models agree on bias
+            combined_score = min(base_score + nigerian_boost, 1.0)
+            explanation = f"Both base model ({base_score:.3f}) and Nigerian context analysis agree on bias presence"
+        elif nigerian_boost >= 0.3:
+            # Strong Nigerian context bias, even if base model disagrees
+            combined_score = max(base_score, 0.6 + nigerian_boost)
+            explanation = f"Strong Nigerian context bias detected despite lower base model score"
+        else:
+            # Mild enhancement
+            combined_score = base_score + (nigerian_boost * 0.5)
+            explanation = f"Base model score enhanced by Nigerian context analysis"
+        
+        return min(combined_score, 1.0), explanation
+
+    def _determine_bias_level(self, score: float) -> str:
+        """Determine bias level from score"""
+        if score >= 0.8:
+            return "high"
+        elif score >= 0.6:
+            return "medium"
+        elif score >= 0.4:
+            return "low"
+        else:
+            return "minimal"
+
+    def _generate_recommendations(self, detections: List[BiasDetection]) -> List[str]:
+        """Generate actionable recommendations"""
+        recommendations = []
+        
+        if not detections:
+            return ["Content appears neutral. Consider fact-checking sources for accuracy."]
+        
+        categories_found = set(d.category for d in detections)
+        
+        if BiasCategory.POLITICAL in categories_found:
+            recommendations.append(
+                "Consider presenting multiple political perspectives to provide balanced coverage"
+            )
+        
+        if BiasCategory.ETHNIC in categories_found:
+            recommendations.append(
+                "Focus on individual actions rather than ethnic generalizations. Avoid stereotyping language."
+            )
+        
+        if BiasCategory.RELIGIOUS in categories_found:
+            recommendations.append(
+                "Ensure religious discussions remain respectful and acknowledge diverse viewpoints"
+            )
+        
+        if BiasCategory.REGIONAL in categories_found:
+            recommendations.append(
+                "Avoid regional stereotypes. Focus on specific issues rather than broad geographical generalizations."
+            )
+        
+        # Check for high-confidence detections
+        high_confidence = [d for d in detections if d.confidence >= 0.8]
+        if high_confidence:
+            recommendations.insert(0, 
+                "Strong bias indicators detected. Consider revising language to be more neutral and factual."
+            )
+        
+        return recommendations
 
 
-class BiasTypeClassifier:
+class EnhancedBiasTypeClassifier:
+    """Enhanced bias type classifier with Nigerian context"""
+    
     def __init__(self, model_name="facebook/bart-large-mnli"):
         if model_name not in _model_cache:
             _model_cache[model_name] = pipeline("zero-shot-classification", model=model_name)
         self.classifier = _model_cache[model_name]
-        self.nigerian_enhancer = NigerianBiasEnhancer()
+        self.nigerian_analyzer = NigerianContextAnalyzer()
 
-    def predict(self, text):
+    def predict(self, text: str) -> Dict:
+        """Predict bias type with enhanced Nigerian context awareness"""
         try:
-            # Check for Nigerian context first
-            nigerian_matches = self.nigerian_enhancer.detect_nigerian_context(text)
-
-            # Generate specific bias labels based on detected context
-            specific_bias_type = self._generate_specific_bias_type(nigerian_matches, text)
-
-            if specific_bias_type:
-                # Use the specific bias type we detected
-                bias_type = specific_bias_type["type"]
-                confidence = specific_bias_type["confidence"]
-
+            # Analyze Nigerian context first
+            nigerian_detections = self.nigerian_analyzer.analyze_text(text)
+            
+            if nigerian_detections:
+                # Use Nigerian context for primary classification
+                primary_detection = nigerian_detections[0]  # Highest confidence
+                
                 response = {
-                    "type": bias_type,
-                    "confidence": confidence,
-                    "specific_target": specific_bias_type["target"],
-                    "bias_category": specific_bias_type["category"],
-                    "all_predictions": [
+                    "type": self._format_bias_type(primary_detection),
+                    "confidence": round(primary_detection.confidence * 100, 2),
+                    "specific_target": primary_detection.term,
+                    "bias_category": primary_detection.category.value,
+                    "bias_direction": primary_detection.bias_direction,
+                    "explanation": primary_detection.explanation,
+                    "nigerian_context": True,
+                    "all_detections": [
                         {
-                            "type": bias_type,
-                            "confidence": confidence
+                            "type": self._format_bias_type(d),
+                            "confidence": round(d.confidence * 100, 2),
+                            "term": d.term,
+                            "direction": d.bias_direction
                         }
+                        for d in nigerian_detections[:3]  # Top 3
                     ]
                 }
             else:
                 # Fall back to general classification
                 labels = [
-                    "political bias",
-                    "ethnic bias",
-                    "religious bias",
-                    "gender bias",
-                    "social bias",
-                    "no bias"
+                    "political bias", "ethnic bias", "religious bias", 
+                    "gender bias", "social bias", "regional bias", "no bias"
                 ]
-
+                
                 result = self.classifier(text, labels)
                 top_type = result['labels'][0]
                 top_confidence = round(result['scores'][0] * 100, 2)
-
-                if top_type == "no bias" and top_confidence > 70:
-                    bias_type = "neutral"
-                else:
-                    bias_type = top_type
-
+                
                 response = {
-                    "type": bias_type,
+                    "type": "neutral" if top_type == "no bias" and top_confidence > 70 else top_type,
                     "confidence": top_confidence,
+                    "nigerian_context": False,
                     "all_predictions": [
                         {
                             "type": label,
@@ -378,149 +599,136 @@ class BiasTypeClassifier:
                         for label, score in zip(result['labels'][:3], result['scores'][:3])
                     ]
                 }
-
-            # Add detected context info
-            if nigerian_matches:
-                response["detected_terms"] = [match['term'] for match in nigerian_matches[:3]]
-
+            
             return response
-
+        
         except Exception as e:
             return {
                 "type": "analysis_error",
                 "confidence": 0,
                 "error": str(e),
+                "nigerian_context": False,
                 "all_predictions": []
             }
 
-    def _generate_specific_bias_type(self, nigerian_matches, text):
-        """Generate specific bias type based on detected Nigerian context"""
-        if not nigerian_matches:
-            return None
-
-        text_lower = text.lower()
-
-        # Check for specific political party bias
-        political_parties = {
-            "apc": "APC political bias",
-            "pdp": "PDP political bias",
-            "labour party": "Labour Party political bias",
-            "obi": "Peter Obi political bias",
-            "tinubu": "Tinubu political bias",
-            "atiku": "Atiku political bias",
-            "buhari": "Buhari political bias"
-        }
-
-        # Check for specific ethnic bias
-        ethnic_groups = {
-            "yoruba": "Anti-Yoruba ethnic bias",
-            "igbo": "Anti-Igbo ethnic bias",
-            "hausa": "Anti-Hausa ethnic bias",
-            "fulani": "Anti-Fulani ethnic bias",
-            "ijaw": "Anti-Ijaw ethnic bias",
-            "aboki": "Anti-Northern ethnic bias",
-            "nyamiri": "Anti-Igbo ethnic bias",
-            "gambari": "Anti-Hausa ethnic bias"
-        }
-
-        # Check for specific religious bias
-        religious_groups = {
-            "christian": "Anti-Christian religious bias",
-            "muslim": "Anti-Muslim religious bias",
-            "sharia": "Anti-Islamic religious bias",
-            "jihad": "Anti-Islamic religious bias",
-            "crusade": "Anti-Christian religious bias",
-            "infidel": "Religious intolerance bias",
-            "kafir": "Anti-Christian religious bias"
-        }
-
-        # Check for regional bias
-        regional_terms = {
-            "north": "Anti-Northern regional bias",
-            "south": "Anti-Southern regional bias",
-            "northerner": "Anti-Northern regional bias",
-            "southerner": "Anti-Southern regional bias",
-            "arewa": "Pro-Northern regional bias",
-            "biafra": "Pro-Biafran regional bias"
-        }
-
-        # Look for specific matches and determine bias direction
-        for match in nigerian_matches:
-            term = match['term']
-
-            # Check political bias
-            if term in political_parties:
-                bias_direction = self._determine_bias_direction(text_lower, term)
-                specific_type = political_parties[term]
-                if bias_direction == "negative":
-                    specific_type = f"Anti-{term.upper()} political bias"
-                elif bias_direction == "positive":
-                    specific_type = f"Pro-{term.upper()} political bias"
-
-                return {
-                    "type": specific_type,
-                    "confidence": 85, # Pre-defined confidence for pattern match
-                    "target": term.upper(),
-                    "category": "political"
-                }
-
-            # Check ethnic bias
-            if term in ethnic_groups:
-                return {
-                    "type": ethnic_groups[term],
-                    "confidence": 90, # Higher for derogatory terms
-                    "target": term.capitalize(),
-                    "category": "ethnic"
-                }
-
-            # Check religious bias
-            if term in religious_groups:
-                return {
-                    "type": religious_groups[term],
-                    "confidence": 88,
-                    "target": term.capitalize(),
-                    "category": "religious"
-                }
-
-            # Check regional bias
-            if term in regional_terms:
-                return {
-                    "type": regional_terms[term],
-                    "confidence": 82,
-                    "target": term.capitalize(),
-                    "category": "regional"
-                }
-
-        return None
-
-    def _determine_bias_direction(self, text, term):
-        """Determine if bias is positive or negative toward the term"""
-        negative_indicators = ["bad", "terrible", "corrupt", "evil", "worst", "hate", "destroy", "useless",
-                               "incompetent"]
-        positive_indicators = ["good", "great", "best", "love", "excellent", "amazing", "support", "vote"]
-
-        # Look for sentiment words near the term
-        words = text.split()
-        term_index = -1
-        for i, word in enumerate(words):
-            if term in word:
-                term_index = i
-                break
-
-        if term_index == -1:
-            return "neutral"
-
-        # Check words around the term (±3 words)
-        context_start = max(0, term_index - 3)
-        context_end = min(len(words), term_index + 4)
-        context_words = words[context_start:context_end]
-
-        negative_count = sum(1 for word in context_words if any(neg in word for neg in negative_indicators))
-        positive_count = sum(1 for word in context_words if any(pos in word for pos in positive_indicators))
-
-        if negative_count > positive_count:
-            return "negative"
-        elif positive_count > negative_count:
-            return "positive"
+    def _format_bias_type(self, detection: BiasDetection) -> str:
+        """Format bias type for display"""
+        direction = detection.bias_direction.capitalize()
+        category = detection.category.value.capitalize()
+        term = detection.term.capitalize()
+        
+        if detection.bias_direction == "neutral":
+            return f"{category} bias (regarding {term})"
         else:
-            return "neutral"
+            return f"{direction} {category} bias (targeting {term})"
+
+
+# Clickbait detector as bonus feature
+class ClickbaitDetector:
+    """Detect clickbait patterns in Nigerian context"""
+    
+    def __init__(self):
+        self.clickbait_patterns = [
+            # Universal patterns
+            r'\b(shocking|unbelievable|you won\'t believe|must see|amazing|incredible)\b',
+            r'\b(breaking|urgent|just in|developing|alert)\b',
+            r'\b(\d+\s+(reasons|ways|things|secrets|facts|tricks))\b',
+            r'\b(this will|what happens next|the result will|you\'ll never guess)\b',
+            r'\b(doctors hate|banks don\'t want|government hiding)\b',
+            
+            # Nigerian-specific clickbait
+            r'\b(buhari finally|tinubu shock|obi reveals|atiku exposes)\b',
+            r'\b(lagos residents|abuja people|kano citizens)\s+(shocked|surprised|amazed)\b',
+            r'\b(see what|look what|check what)\s+(happened|occurs|occurs)\b',
+            r'\b(nigerian|naija)\s+(secret|mystery|revelation)\b',
+            r'\b(this nigerian|this naija)\s+(will|did|has)\b',
+        ]
+        
+        self.clickbait_indicators = {
+            "excessive_caps": r'[A-Z]{5,}',
+            "excessive_punctuation": r'[!?]{2,}',
+            "number_lists": r'\b\d+\s+(things|reasons|ways|secrets)\b',
+            "superlatives": r'\b(best|worst|most|least|ultimate|perfect)\b',
+            "urgency": r'\b(now|today|immediately|urgent|breaking|just in)\b'
+        }
+
+    def detect(self, text: str) -> Dict:
+        """Detect clickbait patterns"""
+        clickbait_score = 0.0
+        detected_patterns = []
+        
+        text_lower = text.lower()
+        
+        # Check main patterns
+        for pattern in self.clickbait_patterns:
+            matches = re.findall(pattern, text_lower, re.IGNORECASE)
+            if matches:
+                clickbait_score += 0.3
+                detected_patterns.extend([m if isinstance(m, str) else ' '.join(m) for m in matches])
+        
+        # Check additional indicators
+        for indicator, pattern in self.clickbait_indicators.items():
+            if re.search(pattern, text, re.IGNORECASE):
+                clickbait_score += 0.2
+                detected_patterns.append(indicator.replace('_', ' '))
+        
+        # Cap the score
+        clickbait_score = min(clickbait_score, 1.0)
+        
+        return {
+            "is_clickbait": clickbait_score >= 0.4,
+            "confidence": clickbait_score,
+            "level": "high" if clickbait_score >= 0.7 else "medium" if clickbait_score >= 0.4 else "low",
+            "detected_patterns": list(set(detected_patterns)),
+            "explanation": f"Clickbait confidence: {clickbait_score:.2f} based on detected patterns"
+        }
+
+
+# Main integrated analyzer
+class BiasLensAnalyzer:
+    """Main analyzer combining all detection capabilities"""
+    
+    def __init__(self):
+        self.bias_detector = EnhancedBiasDetector()
+        self.bias_classifier = EnhancedBiasTypeClassifier()
+        self.clickbait_detector = ClickbaitDetector()
+
+    def analyze(self, text: str) -> Dict:
+        """Comprehensive analysis of text"""
+        bias_analysis = self.bias_detector.detect(text)
+        type_analysis = self.bias_classifier.predict(text)
+        clickbait_analysis = self.clickbait_detector.detect(text)
+        
+        # Combine into comprehensive report
+        return {
+            "text": text[:200] + "..." if len(text) > 200 else text,
+            "timestamp": "placeholder_timestamp",
+            
+            # Overall assessment
+            "overall_bias": {
+                "is_biased": bias_analysis["is_biased"],
+                "confidence": bias_analysis["confidence"],
+                "level": bias_analysis["bias_level"]
+            },
+            
+            # Detailed bias analysis
+            "bias_details": {
+                "type": type_analysis["type"],
+                "type_confidence": type_analysis["confidence"],
+                "nigerian_context": type_analysis.get("nigerian_context", False),
+                "specific_detections": bias_analysis.get("nigerian_detections", [])
+            },
+            
+            # Clickbait analysis
+            "clickbait": clickbait_analysis,
+            
+            # Recommendations
+            "recommendations": bias_analysis.get("recommendations", []),
+            
+            # Technical details
+            "technical_details": {
+                "base_model_score": bias_analysis.get("base_model_score", 0),
+                "explanation": bias_analysis.get("explanation", ""),
+                "error": bias_analysis.get("error")
+            }
+        }
